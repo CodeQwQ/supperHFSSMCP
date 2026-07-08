@@ -14,7 +14,7 @@
 
 - 文档版本：v0.1
 - 日期：2026-07-08
-- 当前代码状态：已完成 MCP 服务骨架、mock backend、PyAEDT backend 接口预留、基础工具注册和离线测试。
+- 当前代码状态：已完成 MCP 服务骨架、mock backend、PyAEDT backend 接口预留、基础工具注册、工程/design 管理和贴片天线 workflow 离线测试。
 - 当前主线：先打通服务器端 MCP 到 HFSS 的稳定控制底座，再实现贴片天线最小闭环，最后扩展多用户、结果分析和更多天线 workflow。
 
 ## 总体原则
@@ -364,7 +364,7 @@ flowchart TD
 - [x] 模块 1：环境诊断与运行配置。
 - [x] 模块 2：Session Manager。
 - [x] 模块 3：Project / Design 工程管理。
-- [ ] 模块 4：贴片天线 Workflow。
+- [x] 模块 4：贴片天线 Workflow。
 - [ ] 模块 5：仿真设置与任务管理。
 - [ ] 模块 6：结果读取与判据分析。
 - [ ] 模块 7：COM Adapter 与 AEDT CLI Runner。

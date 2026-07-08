@@ -88,7 +88,7 @@ class ProjectServiceTests(unittest.TestCase):
         self.service.create_patch_antenna(name="B_Antenna", frequency_ghz=2.4)
         summary = self.service.get_design_summary()
         self.assertEqual("PatchB", summary["data"]["design_name"])
-        self.assertEqual(6, summary["data"]["object_count"])
+        self.assertEqual(7, summary["data"]["object_count"])
 
         switched = self.service.set_active_design("PatchA")
         self.assertEqual("ok", switched["status"])

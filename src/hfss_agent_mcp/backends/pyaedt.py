@@ -11,6 +11,7 @@ from hfss_agent_mcp.core.models import (
     ProjectSpec,
     SetupSpec,
 )
+from hfss_agent_mcp.workflows.patch import build_patch_antenna
 
 
 class PyAedtBackend:
@@ -142,10 +143,17 @@ class PyAedtBackend:
         return data
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
-        raise BackendUnavailableError(
-            "PyAEDT patch antenna workflow is not implemented in this skeleton yet. "
-            "Use the mock backend for offline tests, or add the workflow in backends/pyaedt.py."
-        )
+        self._require_connection()
+        recipe = build_patch_antenna(spec)
+        created_objects: list[str] = []
+        for primitive in recipe["geometry"]:
+            created_objects.append(self._create_geometry_primitive(primitive))
+        for boundary in recipe["boundaries"]:
+            self._assign_boundary(boundary)
+        for port in recipe["ports"]:
+            self._assign_port(port)
+        recipe["created_objects"] = created_objects
+        return recipe
 
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
         self._require_connection()
@@ -193,6 +201,61 @@ class PyAedtBackend:
     def _require_connection(self) -> None:
         if self._hfss is None:
             raise BackendUnavailableError("PyAEDT HFSS session is not connected.")
+
+    def _create_geometry_primitive(self, primitive: dict[str, Any]) -> str:
+        modeler = getattr(self._hfss, "modeler", None)
+        if modeler is None:
+            raise BackendUnavailableError("The active PyAEDT object does not expose modeler.")
+
+        name = primitive["name"]
+        origin = list(primitive["origin_mm"])
+        size = list(primitive["size_mm"])
+        material = primitive["material"]
+        if primitive["kind"] == "box":
+            create_box = getattr(modeler, "create_box", None)
+            if not callable(create_box):
+                raise BackendUnavailableError("PyAEDT modeler does not expose create_box.")
+            create_box(origin=origin, sizes=size, name=name, material=material)
+            return name
+
+        create_rectangle = getattr(modeler, "create_rectangle", None)
+        if not callable(create_rectangle):
+            raise BackendUnavailableError("PyAEDT modeler does not expose create_rectangle.")
+        create_rectangle(
+            orientation="XY",
+            origin=origin,
+            sizes=[size[0], size[1]],
+            name=name,
+            material=material,
+        )
+        return name
+
+    def _assign_boundary(self, boundary: dict[str, Any]) -> None:
+        if boundary["boundary_type"] != "radiation":
+            raise BackendUnavailableError(f"Unsupported boundary type: {boundary['boundary_type']}")
+        assign_radiation = getattr(self._hfss, "assign_radiation_boundary_to_objects", None)
+        if callable(assign_radiation):
+            assign_radiation(list(boundary["objects"]), boundary["name"])
+            return
+        assign_radiation = getattr(self._hfss, "assign_radiation_boundary", None)
+        if callable(assign_radiation):
+            assign_radiation(list(boundary["objects"]), boundary["name"])
+            return
+        raise BackendUnavailableError("The active PyAEDT object does not expose a radiation boundary API.")
+
+    def _assign_port(self, port: dict[str, Any]) -> None:
+        if port["port_type"] != "lumped":
+            raise BackendUnavailableError(f"Unsupported port type: {port['port_type']}")
+        lumped_port = getattr(self._hfss, "lumped_port", None)
+        if not callable(lumped_port):
+            raise BackendUnavailableError("The active PyAEDT object does not expose lumped_port.")
+        start, end = port["integration_line_mm"]
+        lumped_port(
+            assignment=list(port["objects"]),
+            integration_line=[list(start), list(end)],
+            impedance=port["impedance_ohm"],
+            name=port["name"],
+        )
 
     @staticmethod
     def _load_hfss_class() -> Any:

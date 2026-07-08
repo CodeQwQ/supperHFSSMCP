@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ from hfss_agent_mcp.core.models import (
     ProjectSpec,
     SetupSpec,
 )
+from hfss_agent_mcp.workflows.patch import build_patch_antenna
 
 
 class MockHfssBackend:
@@ -159,31 +159,33 @@ class MockHfssBackend:
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
         state = self._active_design_state()
-        dimensions = _estimate_patch_dimensions(spec)
-        object_names = {
-            "substrate": f"{spec.name}_substrate",
-            "ground": f"{spec.name}_ground",
-            "patch": f"{spec.name}_patch",
-            "feed": f"{spec.name}_feed",
-            "airbox": f"{spec.name}_airbox",
-        }
-        for role, object_name in object_names.items():
+        recipe = build_patch_antenna(spec)
+        for primitive in recipe["geometry"]:
+            role = primitive["role"]
+            object_name = primitive["name"]
             state["objects"][object_name] = {
                 "role": role,
                 "antenna": spec.name,
-                "material": spec.substrate_material if role == "substrate" else "pec",
+                "material": primitive["material"],
+                "geometry": primitive,
+            }
+        for port in recipe["ports"]:
+            state["objects"][port["name"]] = {
+                "role": "port",
+                "antenna": spec.name,
+                "port_type": port["port_type"],
+                "assignment": port,
             }
         state["objects"][spec.name] = {
             "role": "patch_antenna",
             "frequency_ghz": spec.frequency_ghz,
-            "substrate_material": spec.substrate_material,
-            "dimensions_mm": dimensions,
+            "materials": recipe["materials"],
+            "dimensions_mm": recipe["dimensions_mm"],
+            "object_names": recipe["object_names"],
+            "boundaries": recipe["boundaries"],
+            "ports": recipe["ports"],
         }
-        return {
-            "antenna_name": spec.name,
-            "object_names": object_names,
-            "dimensions_mm": dimensions,
-        }
+        return recipe
 
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
         state = self._active_design_state()
@@ -289,45 +291,6 @@ class MockHfssBackend:
         if self.design_name not in self.designs:
             raise BackendStateError(f"Design {self.design_name!r} does not exist.")
         return self.designs[self.design_name]
-
-
-def _estimate_patch_dimensions(spec: PatchAntennaSpec) -> dict[str, float]:
-    er = _relative_permittivity(spec.substrate_material)
-    frequency_hz = spec.frequency_ghz * 1e9
-    c = 299_792_458.0
-    width_mm = c / (2 * frequency_hz) * math.sqrt(2 / (er + 1)) * 1000
-    eps_eff = (er + 1) / 2 + (er - 1) / 2 / math.sqrt(1 + 12 * spec.substrate_height_mm / width_mm)
-    delta_l = (
-        0.412
-        * spec.substrate_height_mm
-        * ((eps_eff + 0.3) * (width_mm / spec.substrate_height_mm + 0.264))
-        / ((eps_eff - 0.258) * (width_mm / spec.substrate_height_mm + 0.8))
-    )
-    length_mm = c / (2 * frequency_hz * math.sqrt(eps_eff)) * 1000 - 2 * delta_l
-    patch_width = spec.patch_width_mm or width_mm
-    patch_length = spec.patch_length_mm or length_mm
-    ground_width = spec.ground_width_mm or patch_width + 6 * spec.substrate_height_mm
-    ground_length = spec.ground_length_mm or patch_length + 6 * spec.substrate_height_mm
-    return {
-        "patch_width_mm": round(patch_width, 3),
-        "patch_length_mm": round(patch_length, 3),
-        "ground_width_mm": round(ground_width, 3),
-        "ground_length_mm": round(ground_length, 3),
-        "substrate_height_mm": round(spec.substrate_height_mm, 3),
-        "feed_width_mm": round(spec.feed_width_mm, 3),
-        "feed_offset_mm": round(spec.feed_offset_mm, 3),
-    }
-
-
-def _relative_permittivity(material: str) -> float:
-    lookup = {
-        "fr4": 4.4,
-        "fr4_epoxy": 4.4,
-        "rogers4350": 3.48,
-        "rogers_ro4350": 3.48,
-        "air": 1.0,
-    }
-    return lookup.get(material.strip().lower(), 4.4)
 
 
 def _serialize_design_state(state: dict[str, Any]) -> dict[str, Any]:

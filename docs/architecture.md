@@ -4,7 +4,7 @@
 
 - 架构版本：v0.1
 - 日期：2026-07-08
-- 状态：骨架已实现，真实 PyAEDT 贴片天线 workflow 待接入 HFSS 后补齐
+- 状态：骨架、工程/design 管理和贴片天线 workflow 已实现；真实 PyAEDT workflow 仍需在 HFSS 环境中 smoke test
 - 目标：让团队成员通过各自工作机的 agent 调用服务器端 MCP 服务，完成 HFSS 建模、仿真、验证和结果读取
 
 ## 架构图
@@ -16,6 +16,8 @@ flowchart TD
     C --> D["MCP Tool 层"]
     D --> E["HFSS Core Service"]
     E --> F["Backend Interface"]
+    E --> W["Workflow Recipe"]
+    W --> F
     F --> G["Mock Backend"]
     F --> H["PyAEDT Backend"]
     F --> I["COM Adapter 预留"]
@@ -34,9 +36,11 @@ flowchart TD
 
 `src/hfss_agent_mcp/core/` 是稳定业务层。`HfssService` 负责参数校验、统一返回结构、输出路径保护和下一步建议。MCP tool 和后续自建 CLI 都应优先复用这一层。
 
+`src/hfss_agent_mcp/workflows/` 是领域 workflow 层。当前包含贴片天线 recipe 生成逻辑，负责把频率、材料和尺寸参数转换为几何、材料、边界和端口计划。
+
 `src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
 
-`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、mock 贴片天线闭环、Touchstone 输出路径保护。
+`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、Touchstone 输出路径保护。
 
 ## 设计原因
 
@@ -46,7 +50,7 @@ flowchart TD
 
 第三，参考 Cai-aa/CAE-Agent-Hub 的经验，后续真实后端应重视显式 session 选择，例如 PID、gRPC port、project path 和 design name，避免服务器上多个 AEDT 实例被误连。当前 `connect_hfss` 已预留 `machine`、`port`、`desktop_version`、`project_path`、`design_name` 等参数。
 
-第四，参考 gfgf2023/hfss-mcp-server 的经验，高层领域工具是提升 agent 效率的关键。当前先暴露 `create_patch_antenna`，但其真实 PyAEDT 实现暂不硬写在 MCP tool 中，而是留在 backend/workflow 层，避免后续天线类型扩展时工具层膨胀。
+第四，参考 gfgf2023/hfss-mcp-server 的经验，高层领域工具是提升 agent 效率的关键。当前先暴露 `create_patch_antenna`，但尺寸估算、几何计划、边界和端口不硬写在 MCP tool 中，而是留在 workflow/backend 层，避免后续天线类型扩展时工具层膨胀。
 
 ## 当前工具
 
@@ -65,7 +69,7 @@ flowchart TD
 - `create_hfss_design`：创建或切换 HFSS design。
 - `set_active_design`：切换当前 active design。
 - `get_design_summary`：读取指定或当前 design 的对象和 setup 摘要。
-- `create_patch_antenna`：创建贴片天线 workflow 对象。
+- `create_patch_antenna`：创建贴片天线 workflow 对象，返回尺寸、几何、材料、边界和端口 recipe。
 - `create_simulation_setup`：创建 setup 和线性扫频。
 - `validate_design`：执行设计验证。
 - `run_simulation`：运行指定 setup。

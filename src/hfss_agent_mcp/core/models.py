@@ -59,6 +59,7 @@ class PatchAntennaSpec:
     name: str
     frequency_ghz: float
     substrate_material: str = "FR4_epoxy"
+    conductor_material: str = "copper"
     substrate_height_mm: float = 1.6
     patch_length_mm: float | None = None
     patch_width_mm: float | None = None
@@ -66,6 +67,8 @@ class PatchAntennaSpec:
     ground_width_mm: float | None = None
     feed_offset_mm: float = 0.0
     feed_width_mm: float = 3.0
+    airbox_margin_mm: float | None = None
+    port_type: str = "lumped"
 
 
 @dataclass(frozen=True)

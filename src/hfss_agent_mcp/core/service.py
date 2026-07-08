@@ -224,6 +224,7 @@ class HfssService:
         name: str,
         frequency_ghz: float,
         substrate_material: str = "FR4_epoxy",
+        conductor_material: str = "copper",
         substrate_height_mm: float = 1.6,
         patch_length_mm: float | None = None,
         patch_width_mm: float | None = None,
@@ -231,8 +232,13 @@ class HfssService:
         ground_width_mm: float | None = None,
         feed_offset_mm: float = 0.0,
         feed_width_mm: float = 3.0,
+        airbox_margin_mm: float | None = None,
+        port_type: str = "lumped",
     ) -> dict[str, Any]:
         _require_non_empty("name", name)
+        _require_non_empty("substrate_material", substrate_material)
+        _require_non_empty("conductor_material", conductor_material)
+        _require_non_empty("port_type", port_type)
         _require_positive("frequency_ghz", frequency_ghz)
         _require_positive("substrate_height_mm", substrate_height_mm)
         _require_positive("feed_width_mm", feed_width_mm)
@@ -241,6 +247,7 @@ class HfssService:
             "patch_width_mm": patch_width_mm,
             "ground_length_mm": ground_length_mm,
             "ground_width_mm": ground_width_mm,
+            "airbox_margin_mm": airbox_margin_mm,
         }.items():
             if value is not None:
                 _require_positive(field_name, value)
@@ -249,6 +256,7 @@ class HfssService:
             name=name,
             frequency_ghz=frequency_ghz,
             substrate_material=substrate_material,
+            conductor_material=conductor_material,
             substrate_height_mm=substrate_height_mm,
             patch_length_mm=patch_length_mm,
             patch_width_mm=patch_width_mm,
@@ -256,6 +264,8 @@ class HfssService:
             ground_width_mm=ground_width_mm,
             feed_offset_mm=feed_offset_mm,
             feed_width_mm=feed_width_mm,
+            airbox_margin_mm=airbox_margin_mm,
+            port_type=port_type,
         )
         return self._call(
             "Patch antenna workflow object created.",

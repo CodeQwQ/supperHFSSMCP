@@ -11,9 +11,11 @@ from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
     PatchAntennaSpec,
+    SessionLaunchSpec,
     SetupSpec,
     ToolResponse,
 )
+from hfss_agent_mcp.core.session import SessionManager
 
 
 class HfssService:
@@ -26,6 +28,7 @@ class HfssService:
         self.backend = backend
         self.output_root = Path(output_root).resolve()
         self.config = config or ServerConfig(output_root=self.output_root)
+        self.sessions = SessionManager(backend.name)
 
     def health_check(self) -> dict[str, Any]:
         environment = self._environment_data()
@@ -59,6 +62,8 @@ class HfssService:
         new_desktop: bool = False,
         machine: str | None = None,
         port: int | None = None,
+        session_id: str | None = None,
+        owner: str | None = None,
     ) -> dict[str, Any]:
         spec = ConnectionSpec(
             desktop_version=desktop_version,
@@ -69,11 +74,70 @@ class HfssService:
             new_desktop=new_desktop,
             machine=machine,
             port=port,
+            session_id=session_id,
+            owner=owner,
         )
         return self._call(
             "Connected to HFSS session.",
-            lambda: self.backend.connect(spec),
-            next_actions=["get_project_info", "create_hfss_design", "create_patch_antenna"],
+            lambda: self._connect_session(spec),
+            next_actions=[
+                "get_session_info",
+                "get_project_info",
+                "create_hfss_design",
+                "create_patch_antenna",
+            ],
+        )
+
+    def list_aedt_sessions(self) -> dict[str, Any]:
+        return self._call(
+            "AEDT session records retrieved.",
+            lambda: {
+                "count": len(self.sessions.list()),
+                "active_session_id": self.sessions.active_session_id,
+                "sessions": [record.to_dict() for record in self.sessions.list()],
+            },
+            next_actions=["launch_aedt", "connect_hfss"],
+        )
+
+    def launch_aedt(
+        self,
+        desktop_version: str | None = None,
+        machine: str | None = None,
+        port: int | None = None,
+        project_path: str | None = None,
+        design_name: str | None = None,
+        owner: str | None = None,
+        non_graphical: bool = True,
+    ) -> dict[str, Any]:
+        spec = SessionLaunchSpec(
+            desktop_version=desktop_version,
+            machine=machine,
+            port=port,
+            project_path=project_path,
+            design_name=design_name,
+            owner=owner,
+            non_graphical=non_graphical,
+        )
+        return self._call(
+            "AEDT session record launched.",
+            lambda: {"session": self.sessions.launch(spec).to_dict()},
+            next_actions=["connect_hfss", "get_session_info"],
+        )
+
+    def get_session_info(self, session_id: str) -> dict[str, Any]:
+        _require_non_empty("session_id", session_id)
+        return self._call(
+            "AEDT session record retrieved.",
+            lambda: {"session": self.sessions.require(session_id).to_dict()},
+            next_actions=["connect_hfss", "release_connection"],
+        )
+
+    def release_connection(self, session_id: str) -> dict[str, Any]:
+        _require_non_empty("session_id", session_id)
+        return self._call(
+            "AEDT session record released.",
+            lambda: {"session": self.sessions.release(session_id).to_dict()},
+            next_actions=["list_aedt_sessions", "connect_hfss"],
         )
 
     def get_project_info(self) -> dict[str, Any]:
@@ -222,6 +286,11 @@ class HfssService:
 
     def _environment_data(self) -> dict[str, Any]:
         return collect_environment(self.config, self.backend.health())
+
+    def _connect_session(self, spec: ConnectionSpec) -> dict[str, Any]:
+        project = self.backend.connect(spec)
+        record = self.sessions.connect(spec)
+        return {"session": record.to_dict(), "project": project}
 
     def _call(
         self,

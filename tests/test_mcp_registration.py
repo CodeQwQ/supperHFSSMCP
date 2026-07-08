@@ -22,6 +22,10 @@ class McpRegistrationTests(unittest.TestCase):
             {
                 "health_check",
                 "env_check",
+                "list_aedt_sessions",
+                "launch_aedt",
+                "get_session_info",
+                "release_connection",
                 "connect_hfss",
                 "get_project_info",
                 "create_hfss_design",

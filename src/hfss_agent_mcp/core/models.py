@@ -26,6 +26,19 @@ class ConnectionSpec:
     new_desktop: bool = False
     machine: str | None = None
     port: int | None = None
+    session_id: str | None = None
+    owner: str | None = None
+
+
+@dataclass(frozen=True)
+class SessionLaunchSpec:
+    desktop_version: str | None = None
+    machine: str | None = None
+    port: int | None = None
+    project_path: str | None = None
+    design_name: str | None = None
+    owner: str | None = None
+    non_graphical: bool = True
 
 
 @dataclass(frozen=True)

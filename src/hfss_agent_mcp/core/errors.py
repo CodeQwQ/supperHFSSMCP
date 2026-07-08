@@ -19,3 +19,7 @@ class ConfigurationError(HfssAgentError):
 
 class InputValidationError(HfssAgentError):
     """Raised when tool input violates project constraints."""
+
+
+class SessionError(HfssAgentError):
+    """Raised when session lifecycle operations cannot be completed."""

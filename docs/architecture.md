@@ -52,6 +52,10 @@ flowchart TD
 
 - `health_check`：检查 MCP 服务和后端状态。
 - `env_check`：检查 Python、MCP SDK、PyAEDT、AEDT 可执行文件、transport 和输出目录。
+- `list_aedt_sessions`：列出 MCP server 已知的 AEDT/HFSS session records。
+- `launch_aedt`：创建显式 session record，供后续连接复用。
+- `get_session_info`：按 session id 查询会话状态。
+- `release_connection`：释放 MCP server 内部 session record。
 - `connect_hfss`：连接本地或远程 AEDT/HFSS 会话。
 - `get_project_info`：读取当前工程状态。
 - `create_hfss_design`：创建或切换 HFSS design。

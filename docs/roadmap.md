@@ -362,7 +362,7 @@ flowchart TD
 ## 近期执行顺序
 
 - [x] 模块 1：环境诊断与运行配置。
-- [ ] 模块 2：Session Manager。
+- [x] 模块 2：Session Manager。
 - [ ] 模块 3：Project / Design 工程管理。
 - [ ] 模块 4：贴片天线 Workflow。
 - [ ] 模块 5：仿真设置与任务管理。

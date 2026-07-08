@@ -8,6 +8,7 @@ from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
     PatchAntennaSpec,
+    ProjectSpec,
     SetupSpec,
 )
 
@@ -54,13 +55,67 @@ class PyAedtBackend:
 
     def get_project_info(self) -> dict[str, Any]:
         self._require_connection()
+        designs = _coerce_list(
+            getattr(self._hfss, "design_list", None)
+            or getattr(self._hfss, "designs", None)
+        )
+        object_names = _coerce_list(
+            getattr(getattr(self._hfss, "modeler", None), "object_names", None)
+        )
         return {
             "backend": self.name,
             "connected": True,
+            "project_loaded": True,
             "project_name": getattr(self._hfss, "project_name", None),
+            "project_path": getattr(self._hfss, "project_file", None),
             "design_name": getattr(self._hfss, "design_name", None),
+            "active_design": getattr(self._hfss, "design_name", None),
+            "designs": designs,
             "solution_type": getattr(self._hfss, "solution_type", None),
+            "object_count": len(object_names),
+            "objects": object_names,
         }
+
+    def create_project(self, spec: ProjectSpec) -> dict[str, Any]:
+        Hfss = self._load_hfss_class()
+        self._hfss = Hfss(
+            project=spec.project_path,
+            new_desktop=True,
+            non_graphical=True,
+        )
+        save_project = getattr(self._hfss, "save_project", None)
+        if callable(save_project):
+            save_project(spec.project_path)
+        return self.get_project_info()
+
+    def open_project(self, path: Path) -> dict[str, Any]:
+        return self.connect(ConnectionSpec(project_path=str(path)))
+
+    def save_project(self, path: Path | None = None) -> dict[str, Any]:
+        self._require_connection()
+        save_project = getattr(self._hfss, "save_project", None)
+        if not callable(save_project):
+            raise BackendUnavailableError("The active PyAEDT object does not expose save_project.")
+        result = save_project(str(path)) if path is not None else save_project()
+        data = self.get_project_info()
+        data.update({"saved": bool(result) if result is not None else True})
+        return data
+
+    def close_project(self, save: bool = False) -> dict[str, Any]:
+        self._require_connection()
+        if save:
+            self.save_project()
+        close_project = getattr(self._hfss, "close_project", None)
+        if callable(close_project):
+            close_project(getattr(self._hfss, "project_name", None))
+            self._hfss = None
+            return {"backend": self.name, "connected": False, "project_loaded": False}
+        release_desktop = getattr(self._hfss, "release_desktop", None)
+        if callable(release_desktop):
+            release_desktop(close_projects=True, close_desktop=False)
+            self._hfss = None
+            return {"backend": self.name, "connected": False, "project_loaded": False}
+        raise BackendUnavailableError("The active PyAEDT object does not expose a close project API.")
 
     def create_design(self, spec: DesignSpec) -> dict[str, Any]:
         self._require_connection()
@@ -69,6 +124,22 @@ class PyAedtBackend:
             raise BackendUnavailableError("The active PyAEDT object does not expose insert_design.")
         insert_design(spec.design_name, solution_type=spec.solution_type)
         return self.get_project_info()
+
+    def set_active_design(self, design_name: str) -> dict[str, Any]:
+        self._require_connection()
+        set_active_design = getattr(self._hfss, "set_active_design", None)
+        if not callable(set_active_design):
+            raise BackendUnavailableError("The active PyAEDT object does not expose set_active_design.")
+        set_active_design(design_name)
+        return self.get_project_info()
+
+    def get_design_summary(self, design_name: str | None = None) -> dict[str, Any]:
+        if design_name:
+            self.set_active_design(design_name)
+        data = self.get_project_info()
+        data["setup_count"] = len(_coerce_list(getattr(self._hfss, "setup_names", None)))
+        data["setups"] = _coerce_list(getattr(self._hfss, "setup_names", None))
+        return data
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
         raise BackendUnavailableError(
@@ -140,3 +211,13 @@ class PyAedtBackend:
                     "with AEDT/HFSS access. "
                     f"ansys.aedt.core error: {first_error}; pyaedt error: {second_error}"
                 ) from second_error
+
+
+def _coerce_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if callable(value):
+        value = value()
+    if isinstance(value, (list, tuple, set)):
+        return sorted(str(item) for item in value)
+    return [str(value)]

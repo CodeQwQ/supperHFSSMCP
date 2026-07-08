@@ -11,10 +11,12 @@ from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
     PatchAntennaSpec,
+    ProjectSpec,
     SessionLaunchSpec,
     SetupSpec,
     ToolResponse,
 )
+from hfss_agent_mcp.core.project import ProjectPathPolicy
 from hfss_agent_mcp.core.session import SessionManager
 
 
@@ -29,6 +31,7 @@ class HfssService:
         self.output_root = Path(output_root).resolve()
         self.config = config or ServerConfig(output_root=self.output_root)
         self.sessions = SessionManager(backend.name)
+        self.project_paths = ProjectPathPolicy(self.output_root / "projects")
 
     def health_check(self) -> dict[str, Any]:
         environment = self._environment_data()
@@ -144,7 +147,43 @@ class HfssService:
         return self._call(
             "Project state retrieved.",
             self.backend.get_project_info,
-            next_actions=["create_hfss_design", "validate_design"],
+            next_actions=["create_project", "open_project", "create_hfss_design", "validate_design"],
+        )
+
+    def create_project(
+        self,
+        project_name: str,
+        relative_path: str | None = None,
+    ) -> dict[str, Any]:
+        return self._call(
+            "HFSS project created.",
+            lambda: self._create_project(project_name, relative_path),
+            next_actions=["create_hfss_design", "save_project", "get_project_info"],
+        )
+
+    def open_project(self, relative_path: str) -> dict[str, Any]:
+        return self._call(
+            "HFSS project opened.",
+            lambda: self.backend.open_project(self.project_paths.resolve_relative(relative_path)),
+            next_actions=["get_project_info", "create_hfss_design", "set_active_design"],
+        )
+
+    def save_project(self, relative_path: str | None = None) -> dict[str, Any]:
+        return self._call(
+            "HFSS project saved.",
+            lambda: self.backend.save_project(
+                self.project_paths.resolve_relative(relative_path)
+                if relative_path is not None
+                else None
+            ),
+            next_actions=["get_project_info", "close_project"],
+        )
+
+    def close_project(self, save: bool = False) -> dict[str, Any]:
+        return self._call(
+            "HFSS project closed.",
+            lambda: self.backend.close_project(save=save),
+            next_actions=["open_project", "create_project"],
         )
 
     def create_hfss_design(
@@ -162,7 +201,22 @@ class HfssService:
         return self._call(
             "HFSS design is ready.",
             lambda: self.backend.create_design(spec),
-            next_actions=["create_patch_antenna", "create_simulation_setup"],
+            next_actions=["get_design_summary", "create_patch_antenna", "create_simulation_setup"],
+        )
+
+    def set_active_design(self, design_name: str) -> dict[str, Any]:
+        _require_non_empty("design_name", design_name)
+        return self._call(
+            "Active HFSS design selected.",
+            lambda: self.backend.set_active_design(design_name),
+            next_actions=["get_design_summary", "create_patch_antenna", "validate_design"],
+        )
+
+    def get_design_summary(self, design_name: str | None = None) -> dict[str, Any]:
+        return self._call(
+            "HFSS design summary retrieved.",
+            lambda: self.backend.get_design_summary(design_name),
+            next_actions=["set_active_design", "create_patch_antenna", "create_simulation_setup"],
         )
 
     def create_patch_antenna(
@@ -291,6 +345,20 @@ class HfssService:
         project = self.backend.connect(spec)
         record = self.sessions.connect(spec)
         return {"session": record.to_dict(), "project": project}
+
+    def _create_project(self, project_name: str, relative_path: str | None) -> dict[str, Any]:
+        _require_non_empty("project_name", project_name)
+        project_path = (
+            self.project_paths.resolve_relative(relative_path)
+            if relative_path is not None
+            else self.project_paths.default_project_path(project_name)
+        )
+        return self.backend.create_project(
+            ProjectSpec(
+                project_name=project_name,
+                project_path=str(project_path),
+            )
+        )
 
     def _call(
         self,

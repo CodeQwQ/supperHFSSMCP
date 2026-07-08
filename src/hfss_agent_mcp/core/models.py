@@ -49,6 +49,12 @@ class DesignSpec:
 
 
 @dataclass(frozen=True)
+class ProjectSpec:
+    project_name: str
+    project_path: str
+
+
+@dataclass(frozen=True)
 class PatchAntennaSpec:
     name: str
     frequency_ghz: float

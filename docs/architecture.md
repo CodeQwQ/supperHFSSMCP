@@ -36,7 +36,7 @@ flowchart TD
 
 `src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
 
-`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 贴片天线闭环、Touchstone 输出路径保护。
+`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、mock 贴片天线闭环、Touchstone 输出路径保护。
 
 ## 设计原因
 
@@ -58,7 +58,13 @@ flowchart TD
 - `release_connection`：释放 MCP server 内部 session record。
 - `connect_hfss`：连接本地或远程 AEDT/HFSS 会话。
 - `get_project_info`：读取当前工程状态。
+- `create_project`：在受控工程目录下创建 HFSS project。
+- `open_project`：从受控工程目录打开 HFSS project。
+- `save_project`：保存当前 HFSS project。
+- `close_project`：关闭当前 HFSS project。
 - `create_hfss_design`：创建或切换 HFSS design。
+- `set_active_design`：切换当前 active design。
+- `get_design_summary`：读取指定或当前 design 的对象和 setup 摘要。
 - `create_patch_antenna`：创建贴片天线 workflow 对象。
 - `create_simulation_setup`：创建 setup 和线性扫频。
 - `validate_design`：执行设计验证。

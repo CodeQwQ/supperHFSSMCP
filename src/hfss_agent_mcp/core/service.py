@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hfss_agent_mcp.backends.base import HfssBackend
+from hfss_agent_mcp.config import ServerConfig
+from hfss_agent_mcp.core.environment import collect_environment
 from hfss_agent_mcp.core.errors import HfssAgentError, InputValidationError
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
@@ -15,18 +17,36 @@ from hfss_agent_mcp.core.models import (
 
 
 class HfssService:
-    def __init__(self, backend: HfssBackend, output_root: Path | str) -> None:
+    def __init__(
+        self,
+        backend: HfssBackend,
+        output_root: Path | str,
+        config: ServerConfig | None = None,
+    ) -> None:
         self.backend = backend
         self.output_root = Path(output_root).resolve()
+        self.config = config or ServerConfig(output_root=self.output_root)
 
     def health_check(self) -> dict[str, Any]:
+        environment = self._environment_data()
         return self._ok(
             "HFSS Agent MCP service is reachable.",
             data={
                 "backend": self.backend.health(),
                 "output_root": str(self.output_root),
+                "environment": environment,
             },
-            next_actions=["connect_hfss", "get_project_info"],
+            warnings=environment["warnings"],
+            next_actions=["env_check", "connect_hfss", "get_project_info"],
+        )
+
+    def env_check(self) -> dict[str, Any]:
+        environment = self._environment_data()
+        return self._ok(
+            "Environment check finished.",
+            data=environment,
+            warnings=environment["warnings"],
+            next_actions=["connect_hfss", "health_check"],
         )
 
     def connect_hfss(
@@ -199,6 +219,9 @@ class HfssService:
         if self.output_root != candidate and self.output_root not in candidate.parents:
             raise InputValidationError("relative_path must stay inside HFSS_AGENT_OUTPUT_ROOT.")
         return candidate
+
+    def _environment_data(self) -> dict[str, Any]:
+        return collect_environment(self.config, self.backend.health())
 
     def _call(
         self,

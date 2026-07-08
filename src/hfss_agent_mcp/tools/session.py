@@ -12,6 +12,15 @@ def register(mcp: FastMCP, service: HfssService) -> None:
 
     @mcp.tool(
         description=(
+            "Inspect the server runtime environment, including Python, MCP packages, "
+            "PyAEDT availability, AEDT executable detection, transport and output directory."
+        )
+    )
+    def env_check() -> dict:
+        return service.env_check()
+
+    @mcp.tool(
+        description=(
             "Connect to an AEDT/HFSS session. Use machine and port for a remote "
             "gRPC AEDT service, or project_path/design_name for a local workflow."
         )

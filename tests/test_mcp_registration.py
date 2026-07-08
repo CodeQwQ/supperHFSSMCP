@@ -21,6 +21,7 @@ class McpRegistrationTests(unittest.TestCase):
         self.assertEqual(
             {
                 "health_check",
+                "env_check",
                 "connect_hfss",
                 "get_project_info",
                 "create_hfss_design",

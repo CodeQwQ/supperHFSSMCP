@@ -11,7 +11,11 @@ from hfss_agent_mcp.tools.registry import register_all_tools
 def create_service(config: ServerConfig | None = None) -> HfssService:
     resolved_config = config or ServerConfig.from_env()
     backend = create_backend(resolved_config.backend)
-    return HfssService(backend=backend, output_root=resolved_config.output_root)
+    return HfssService(
+        backend=backend,
+        output_root=resolved_config.output_root,
+        config=resolved_config,
+    )
 
 
 def create_app(

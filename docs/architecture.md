@@ -51,6 +51,7 @@ flowchart TD
 ## 当前工具
 
 - `health_check`：检查 MCP 服务和后端状态。
+- `env_check`：检查 Python、MCP SDK、PyAEDT、AEDT 可执行文件、transport 和输出目录。
 - `connect_hfss`：连接本地或远程 AEDT/HFSS 会话。
 - `get_project_info`：读取当前工程状态。
 - `create_hfss_design`：创建或切换 HFSS design。

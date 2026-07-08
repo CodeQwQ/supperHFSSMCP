@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local runtime outputs
+outputs/
+logs/
+tmp/
+
+# HFSS / AEDT generated artifacts and large simulation outputs
+*.aedtresults/
+*.aedt.lock
+*.asol
+*.fld
+*.mesh
+*.prof
+*.snp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -24,6 +24,8 @@ class ConnectionSpec:
     solution_type: str = "DrivenModal"
     non_graphical: bool = True
     new_desktop: bool = False
+    student_version: bool = False
+    aedt_executable: str | None = None
     machine: str | None = None
     port: int | None = None
     session_id: str | None = None
@@ -79,3 +81,17 @@ class SetupSpec:
     sweep_start_ghz: float = 1.0
     sweep_stop_ghz: float = 3.0
     sweep_points: int = 201
+    sweep_type: str = "LinearCount"
+    max_delta_s: float = 0.02
+    max_passes: int = 10
+    min_passes: int = 1
+
+
+@dataclass(frozen=True)
+class SweepSpec:
+    setup_name: str
+    sweep_name: str
+    sweep_start_ghz: float
+    sweep_stop_ghz: float
+    sweep_points: int
+    sweep_type: str = "LinearCount"

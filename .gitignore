@@ -32,6 +32,7 @@ tmp/
 *.mesh
 *.prof
 *.snp
+batch.log
 
 # OS / editor
 .DS_Store

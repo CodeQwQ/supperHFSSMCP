@@ -9,6 +9,7 @@ from hfss_agent_mcp.core.models import (
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
+    SweepSpec,
 )
 
 
@@ -49,6 +50,9 @@ class HfssBackend(Protocol):
         ...
 
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
+        ...
+
+    def create_frequency_sweep(self, spec: SweepSpec) -> dict[str, Any]:
         ...
 
     def validate_design(self) -> dict[str, Any]:

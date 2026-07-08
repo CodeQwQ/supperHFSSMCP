@@ -4,7 +4,7 @@
 
 - 架构版本：v0.1
 - 日期：2026-07-08
-- 状态：骨架、工程/design 管理和贴片天线 workflow 已实现；真实 PyAEDT workflow 仍需在 HFSS 环境中 smoke test
+- 状态：骨架、工程/design 管理、贴片天线 workflow 和仿真任务管理已实现；真实 Student 版 PyAEDT 会话初始化仍需继续校准，后续 COM/CLI adapter 是重要补充路径
 - 目标：让团队成员通过各自工作机的 agent 调用服务器端 MCP 服务，完成 HFSS 建模、仿真、验证和结果读取
 
 ## 架构图
@@ -17,7 +17,9 @@ flowchart TD
     D --> E["HFSS Core Service"]
     E --> F["Backend Interface"]
     E --> W["Workflow Recipe"]
+    E --> Q["Simulation Job Manager"]
     W --> F
+    Q --> F
     F --> G["Mock Backend"]
     F --> H["PyAEDT Backend"]
     F --> I["COM Adapter 预留"]
@@ -38,9 +40,11 @@ flowchart TD
 
 `src/hfss_agent_mcp/workflows/` 是领域 workflow 层。当前包含贴片天线 recipe 生成逻辑，负责把频率、材料和尺寸参数转换为几何、材料、边界和端口计划。
 
-`src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
+`src/hfss_agent_mcp/core/jobs.py` 是仿真 job 管理入口。当前提供进程内 job record，用于记录求解任务状态、开始/结束时间、失败原因和日志摘要。
 
-`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、Touchstone 输出路径保护。
+`src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。PyAEDT 后端已包含 Student 版 executable、`ANSYSEMSV_ROOTxxx` 和桌面版本推导适配；后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
+
+`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、仿真 job 管理、PyAEDT 连接适配、Touchstone 输出路径保护。
 
 ## 设计原因
 
@@ -70,9 +74,11 @@ flowchart TD
 - `set_active_design`：切换当前 active design。
 - `get_design_summary`：读取指定或当前 design 的对象和 setup 摘要。
 - `create_patch_antenna`：创建贴片天线 workflow 对象，返回尺寸、几何、材料、边界和端口 recipe。
-- `create_simulation_setup`：创建 setup 和线性扫频。
+- `create_simulation_setup`：创建 setup、自适应参数和默认扫频。
+- `create_frequency_sweep`：为已有 setup 创建或覆盖频率扫频。
 - `validate_design`：执行设计验证。
-- `run_simulation`：运行指定 setup。
+- `run_simulation`：运行指定 setup，并创建可查询 job record。
+- `get_simulation_job`：查询仿真 job 状态。
 - `get_s_parameters`：读取 S 参数摘要。
 - `export_touchstone`：导出 Touchstone 到受控输出目录。
 

@@ -23,3 +23,7 @@ class InputValidationError(HfssAgentError):
 
 class SessionError(HfssAgentError):
     """Raised when session lifecycle operations cannot be completed."""
+
+
+class JobError(HfssAgentError):
+    """Raised when simulation job operations cannot be completed."""

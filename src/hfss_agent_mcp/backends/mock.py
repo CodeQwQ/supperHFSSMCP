@@ -12,7 +12,9 @@ from hfss_agent_mcp.core.models import (
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
+    SweepSpec,
 )
+from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
 from hfss_agent_mcp.workflows.patch import build_patch_antenna
 
 
@@ -190,27 +192,43 @@ class MockHfssBackend:
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
         state = self._active_design_state()
         state["setups"][spec.setup_name] = spec
-        return {
-            "setup_name": spec.setup_name,
-            "frequency_ghz": spec.frequency_ghz,
-            "sweep_name": spec.sweep_name,
-            "sweep_start_ghz": spec.sweep_start_ghz,
-            "sweep_stop_ghz": spec.sweep_stop_ghz,
-            "sweep_points": spec.sweep_points,
-        }
+        sweep = SweepSpec(
+            setup_name=spec.setup_name,
+            sweep_name=spec.sweep_name,
+            sweep_start_ghz=spec.sweep_start_ghz,
+            sweep_stop_ghz=spec.sweep_stop_ghz,
+            sweep_points=spec.sweep_points,
+            sweep_type=spec.sweep_type,
+        )
+        self._store_sweep(state, sweep)
+        data = setup_to_dict(spec)
+        data["sweep"] = sweep_to_dict(sweep)
+        return data
+
+    def create_frequency_sweep(self, spec: SweepSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        if spec.setup_name not in state["setups"]:
+            raise BackendStateError(f"Setup {spec.setup_name!r} does not exist.")
+        self._store_sweep(state, spec)
+        return sweep_to_dict(spec)
 
     def validate_design(self) -> dict[str, Any]:
         state = self._active_design_state()
         warnings: list[str] = []
+        errors: list[str] = []
         if not any(item.get("role") == "patch_antenna" for item in state["objects"].values()):
             warnings.append("No antenna workflow object has been created.")
         if not state["setups"]:
             warnings.append("No simulation setup has been created.")
+        if any(not state["sweeps"].get(setup_name) for setup_name in state["setups"]):
+            warnings.append("At least one setup does not have a frequency sweep.")
         return {
-            "valid": not warnings,
+            "valid": not errors and not warnings,
+            "errors": errors,
             "warnings": warnings,
             "object_count": len(state["objects"]),
             "setup_count": len(state["setups"]),
+            "sweep_count": sum(len(sweeps) for sweeps in state["sweeps"].values()),
         }
 
     def run_simulation(self, setup_name: str) -> dict[str, Any]:
@@ -279,6 +297,7 @@ class MockHfssBackend:
                 "solution_type": solution_type,
                 "objects": {},
                 "setups": {},
+                "sweeps": {},
                 "solved_setups": set(),
             }
         self.design_name = design_name
@@ -292,6 +311,11 @@ class MockHfssBackend:
             raise BackendStateError(f"Design {self.design_name!r} does not exist.")
         return self.designs[self.design_name]
 
+    @staticmethod
+    def _store_sweep(state: dict[str, Any], spec: SweepSpec) -> None:
+        state["sweeps"].setdefault(spec.setup_name, {})
+        state["sweeps"][spec.setup_name][spec.sweep_name] = spec
+
 
 def _serialize_design_state(state: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -300,6 +324,13 @@ def _serialize_design_state(state: dict[str, Any]) -> dict[str, Any]:
         "setups": {
             name: asdict(setup)
             for name, setup in state["setups"].items()
+        },
+        "sweeps": {
+            setup_name: {
+                sweep_name: asdict(sweep)
+                for sweep_name, sweep in sweeps.items()
+            }
+            for setup_name, sweeps in state["sweeps"].items()
         },
         "solved_setups": sorted(state["solved_setups"]),
     }
@@ -312,6 +343,13 @@ def _restore_design_state(state: dict[str, Any]) -> dict[str, Any]:
         "setups": {
             name: SetupSpec(**setup)
             for name, setup in state.get("setups", {}).items()
+        },
+        "sweeps": {
+            setup_name: {
+                sweep_name: SweepSpec(**sweep)
+                for sweep_name, sweep in sweeps.items()
+            }
+            for setup_name, sweeps in state.get("sweeps", {}).items()
         },
         "solved_setups": set(state.get("solved_setups", [])),
     }

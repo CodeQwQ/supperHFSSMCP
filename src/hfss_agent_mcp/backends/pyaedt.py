@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +12,9 @@ from hfss_agent_mcp.core.models import (
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
+    SweepSpec,
 )
+from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
 from hfss_agent_mcp.workflows.patch import build_patch_antenna
 
 
@@ -19,6 +23,7 @@ class PyAedtBackend:
 
     def __init__(self) -> None:
         self._hfss: Any | None = None
+        self._student_version = False
 
     def health(self) -> dict[str, Any]:
         try:
@@ -36,11 +41,14 @@ class PyAedtBackend:
         }
 
     def connect(self, spec: ConnectionSpec) -> dict[str, Any]:
+        self._prepare_pyaedt_environment(spec)
         Hfss = self._load_hfss_class()
         kwargs: dict[str, Any] = {
             "new_desktop": spec.new_desktop,
             "non_graphical": spec.non_graphical,
+            "student_version": spec.student_version,
         }
+        self._student_version = spec.student_version
         if spec.project_path:
             kwargs["project"] = spec.project_path
         if spec.design_name:
@@ -83,6 +91,7 @@ class PyAedtBackend:
             project=spec.project_path,
             new_desktop=True,
             non_graphical=True,
+            student_version=self._student_version,
         )
         save_project = getattr(self._hfss, "save_project", None)
         if callable(save_project):
@@ -159,6 +168,25 @@ class PyAedtBackend:
         self._require_connection()
         setup = self._hfss.create_setup(name=spec.setup_name)
         setup.props["Frequency"] = f"{spec.frequency_ghz}GHz"
+        setup.props["MaximumPasses"] = spec.max_passes
+        setup.props["MinimumPasses"] = spec.min_passes
+        setup.props["MaxDeltaS"] = spec.max_delta_s
+        sweep = self.create_frequency_sweep(
+            SweepSpec(
+                setup_name=spec.setup_name,
+                sweep_name=spec.sweep_name,
+                sweep_start_ghz=spec.sweep_start_ghz,
+                sweep_stop_ghz=spec.sweep_stop_ghz,
+                sweep_points=spec.sweep_points,
+                sweep_type=spec.sweep_type,
+            )
+        )
+        data = setup_to_dict(spec)
+        data["sweep"] = sweep
+        return data
+
+    def create_frequency_sweep(self, spec: SweepSpec) -> dict[str, Any]:
+        self._require_connection()
         self._hfss.create_linear_count_sweep(
             setup=spec.setup_name,
             units="GHz",
@@ -166,17 +194,20 @@ class PyAedtBackend:
             stop_frequency=spec.sweep_stop_ghz,
             num_of_freq_points=spec.sweep_points,
             name=spec.sweep_name,
+            sweep_type=spec.sweep_type,
         )
-        return {
-            "setup_name": spec.setup_name,
-            "frequency_ghz": spec.frequency_ghz,
-            "sweep_name": spec.sweep_name,
-        }
+        return sweep_to_dict(spec)
 
     def validate_design(self) -> dict[str, Any]:
         self._require_connection()
         result = self._hfss.validate_design()
-        return {"valid": bool(result), "raw_result": str(result)}
+        valid = bool(result)
+        return {
+            "valid": valid,
+            "errors": [] if valid else [str(result)],
+            "warnings": [],
+            "raw_result": str(result),
+        }
 
     def run_simulation(self, setup_name: str) -> dict[str, Any]:
         self._require_connection()
@@ -275,6 +306,23 @@ class PyAedtBackend:
                     f"ansys.aedt.core error: {first_error}; pyaedt error: {second_error}"
                 ) from second_error
 
+    @staticmethod
+    def _prepare_pyaedt_environment(spec: ConnectionSpec) -> None:
+        if not spec.aedt_executable:
+            return
+        executable = Path(spec.aedt_executable)
+        suffix = _version_suffix_from_executable(executable, spec.desktop_version)
+        if not suffix:
+            return
+        root = str(executable.parent)
+        student_executable = executable.name.lower() == "ansysedtsv.exe" or spec.student_version
+        if student_executable:
+            os.environ[f"ANSYSEMSV_ROOT{suffix}"] = root
+            os.environ.pop(f"ANSYSEM_ROOT{suffix}", None)
+            return
+        os.environ[f"ANSYSEM_ROOT{suffix}"] = root
+        os.environ.pop(f"ANSYSEMSV_ROOT{suffix}", None)
+
 
 def _coerce_list(value: Any) -> list[str]:
     if value is None:
@@ -284,3 +332,15 @@ def _coerce_list(value: Any) -> list[str]:
     if isinstance(value, (list, tuple, set)):
         return sorted(str(item) for item in value)
     return [str(value)]
+
+
+def _version_suffix_from_executable(executable: Path, desktop_version: str | None) -> str | None:
+    if desktop_version:
+        parts = desktop_version.split(".")
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            return f"{parts[0][-2:]}{parts[1][0]}"
+    for part in executable.parts:
+        match = re.fullmatch(r"v?(\d{3})", part.lower())
+        if match:
+            return match.group(1)
+    return None

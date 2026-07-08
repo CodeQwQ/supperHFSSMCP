@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pyaedt = [
-  "ansys-aedt-core>=0.18",
+  "pyaedt>=1.2",
 ]
 dev = []
 

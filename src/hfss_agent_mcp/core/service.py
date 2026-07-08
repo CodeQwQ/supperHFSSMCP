@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -7,6 +8,7 @@ from hfss_agent_mcp.backends.base import HfssBackend
 from hfss_agent_mcp.config import ServerConfig
 from hfss_agent_mcp.core.environment import collect_environment
 from hfss_agent_mcp.core.errors import HfssAgentError, InputValidationError
+from hfss_agent_mcp.core.jobs import JobManager
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
@@ -14,6 +16,7 @@ from hfss_agent_mcp.core.models import (
     ProjectSpec,
     SessionLaunchSpec,
     SetupSpec,
+    SweepSpec,
     ToolResponse,
 )
 from hfss_agent_mcp.core.project import ProjectPathPolicy
@@ -32,6 +35,7 @@ class HfssService:
         self.config = config or ServerConfig(output_root=self.output_root)
         self.sessions = SessionManager(backend.name)
         self.project_paths = ProjectPathPolicy(self.output_root / "projects")
+        self.jobs = JobManager()
 
     def health_check(self) -> dict[str, Any]:
         environment = self._environment_data()
@@ -63,18 +67,27 @@ class HfssService:
         solution_type: str = "DrivenModal",
         non_graphical: bool = True,
         new_desktop: bool = False,
+        student_version: bool | None = None,
         machine: str | None = None,
         port: int | None = None,
         session_id: str | None = None,
         owner: str | None = None,
     ) -> dict[str, Any]:
+        resolved_student_version = (
+            student_version
+            if student_version is not None
+            else self._is_student_aedt_configured()
+        )
+        resolved_desktop_version = desktop_version or self._desktop_version_from_configured_aedt()
         spec = ConnectionSpec(
-            desktop_version=desktop_version,
+            desktop_version=resolved_desktop_version,
             project_path=project_path,
             design_name=design_name,
             solution_type=solution_type,
             non_graphical=non_graphical,
             new_desktop=new_desktop,
+            student_version=resolved_student_version,
+            aedt_executable=str(self.config.aedt_executable) if self.config.aedt_executable else None,
             machine=machine,
             port=port,
             session_id=session_id,
@@ -281,15 +294,28 @@ class HfssService:
         sweep_start_ghz: float = 1.0,
         sweep_stop_ghz: float = 3.0,
         sweep_points: int = 201,
+        sweep_type: str = "LinearCount",
+        max_delta_s: float = 0.02,
+        max_passes: int = 10,
+        min_passes: int = 1,
     ) -> dict[str, Any]:
         _require_non_empty("setup_name", setup_name)
+        _require_non_empty("sweep_name", sweep_name)
+        _require_non_empty("sweep_type", sweep_type)
         _require_positive("frequency_ghz", frequency_ghz)
         _require_positive("sweep_start_ghz", sweep_start_ghz)
         _require_positive("sweep_stop_ghz", sweep_stop_ghz)
+        _require_positive("max_delta_s", max_delta_s)
         if sweep_stop_ghz <= sweep_start_ghz:
             raise InputValidationError("sweep_stop_ghz must be greater than sweep_start_ghz.")
         if sweep_points < 2:
             raise InputValidationError("sweep_points must be at least 2.")
+        if max_passes < 1:
+            raise InputValidationError("max_passes must be at least 1.")
+        if min_passes < 1:
+            raise InputValidationError("min_passes must be at least 1.")
+        if min_passes > max_passes:
+            raise InputValidationError("min_passes must be less than or equal to max_passes.")
 
         spec = SetupSpec(
             setup_name=setup_name,
@@ -298,10 +324,47 @@ class HfssService:
             sweep_start_ghz=sweep_start_ghz,
             sweep_stop_ghz=sweep_stop_ghz,
             sweep_points=sweep_points,
+            sweep_type=sweep_type,
+            max_delta_s=max_delta_s,
+            max_passes=max_passes,
+            min_passes=min_passes,
         )
         return self._call(
             "Simulation setup created.",
             lambda: self.backend.create_setup(spec),
+            next_actions=["create_frequency_sweep", "validate_design", "run_simulation"],
+        )
+
+    def create_frequency_sweep(
+        self,
+        setup_name: str,
+        sweep_name: str,
+        sweep_start_ghz: float,
+        sweep_stop_ghz: float,
+        sweep_points: int,
+        sweep_type: str = "LinearCount",
+    ) -> dict[str, Any]:
+        _require_non_empty("setup_name", setup_name)
+        _require_non_empty("sweep_name", sweep_name)
+        _require_non_empty("sweep_type", sweep_type)
+        _require_positive("sweep_start_ghz", sweep_start_ghz)
+        _require_positive("sweep_stop_ghz", sweep_stop_ghz)
+        if sweep_stop_ghz <= sweep_start_ghz:
+            raise InputValidationError("sweep_stop_ghz must be greater than sweep_start_ghz.")
+        if sweep_points < 2:
+            raise InputValidationError("sweep_points must be at least 2.")
+
+        spec = SweepSpec(
+            setup_name=setup_name,
+            sweep_name=sweep_name,
+            sweep_start_ghz=sweep_start_ghz,
+            sweep_stop_ghz=sweep_stop_ghz,
+            sweep_points=sweep_points,
+            sweep_type=sweep_type,
+        )
+        return self._call(
+            "Frequency sweep created.",
+            lambda: self.backend.create_frequency_sweep(spec),
             next_actions=["validate_design", "run_simulation"],
         )
 
@@ -312,12 +375,20 @@ class HfssService:
             next_actions=["run_simulation", "get_project_info"],
         )
 
-    def run_simulation(self, setup_name: str) -> dict[str, Any]:
+    def run_simulation(self, setup_name: str, wait_for_completion: bool = True) -> dict[str, Any]:
         _require_non_empty("setup_name", setup_name)
         return self._call(
-            "Simulation run finished.",
-            lambda: self.backend.run_simulation(setup_name),
-            next_actions=["get_s_parameters", "export_touchstone"],
+            "Simulation job started.",
+            lambda: self._run_simulation_job(setup_name, wait_for_completion),
+            next_actions=["get_simulation_job", "get_s_parameters", "export_touchstone"],
+        )
+
+    def get_simulation_job(self, job_id: str) -> dict[str, Any]:
+        _require_non_empty("job_id", job_id)
+        return self._call(
+            "Simulation job retrieved.",
+            lambda: {"job": self.jobs.require(job_id).to_dict()},
+            next_actions=["get_s_parameters", "run_simulation"],
         )
 
     def get_s_parameters(
@@ -351,6 +422,21 @@ class HfssService:
     def _environment_data(self) -> dict[str, Any]:
         return collect_environment(self.config, self.backend.health())
 
+    def _is_student_aedt_configured(self) -> bool:
+        executable = self.config.aedt_executable
+        return bool(executable and "ansysedtsv" in executable.name.lower())
+
+    def _desktop_version_from_configured_aedt(self) -> str | None:
+        executable = self.config.aedt_executable
+        if executable is None:
+            return None
+        for part in executable.parts:
+            match = re.fullmatch(r"v?(\d{3})", part.lower())
+            if match:
+                suffix = match.group(1)
+                return f"20{suffix[:2]}.{suffix[2]}"
+        return None
+
     def _connect_session(self, spec: ConnectionSpec) -> dict[str, Any]:
         project = self.backend.connect(spec)
         record = self.sessions.connect(spec)
@@ -369,6 +455,40 @@ class HfssService:
                 project_path=str(project_path),
             )
         )
+
+    def _run_simulation_job(self, setup_name: str, wait_for_completion: bool) -> dict[str, Any]:
+        job = self.jobs.create(setup_name)
+        self.jobs.start(job.job_id, "Simulation job accepted by MCP service.")
+        if not wait_for_completion:
+            return {
+                "job": job.to_dict(),
+                "status": job.status,
+                "backend_note": "Job is tracked by MCP service; backend solve has not been awaited.",
+            }
+
+        try:
+            result = self.backend.run_simulation(setup_name)
+        except HfssAgentError as exc:
+            self.jobs.fail(job.job_id, str(exc))
+            raise
+        if result.get("status") == "failed":
+            failed = self.jobs.fail(
+                job.job_id,
+                str(result.get("failure_reason") or "Backend reported simulation failure."),
+            )
+            data = dict(result)
+            data["job"] = failed.to_dict()
+            data["status"] = "failed"
+            return data
+        completed = self.jobs.complete(
+            job.job_id,
+            result,
+            result.get("backend_note", "Backend solve finished."),
+        )
+        data = dict(result)
+        data["job"] = completed.to_dict()
+        data["status"] = completed.status if result.get("status") == "completed" else result.get("status", completed.status)
+        return data
 
     def _call(
         self,

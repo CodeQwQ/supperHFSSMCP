@@ -4,7 +4,7 @@
 
 - 架构版本：v0.1
 - 日期：2026-07-08
-- 状态：骨架、工程/design 管理、贴片天线 workflow 和仿真任务管理已实现；真实 Student 版 PyAEDT 会话初始化仍需继续校准，后续 COM/CLI adapter 是重要补充路径
+- 状态：骨架、工程/design 管理、贴片天线 workflow、仿真任务管理和 PyAEDT worker 进程隔离已实现；真实 Student 版既有 gRPC 会话连接已通过 smoke test，直接新建 Desktop 的首次 Project/Design 初始化仍需继续增强
 - 目标：让团队成员通过各自工作机的 agent 调用服务器端 MCP 服务，完成 HFSS 建模、仿真、验证和结果读取
 
 ## 架构图
@@ -42,9 +42,9 @@ flowchart TD
 
 `src/hfss_agent_mcp/core/jobs.py` 是仿真 job 管理入口。当前提供进程内 job record，用于记录求解任务状态、开始/结束时间、失败原因和日志摘要。
 
-`src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。PyAEDT 后端已包含 Student 版 executable、`ANSYSEMSV_ROOTxxx`、桌面版本推导和初始化超时适配；后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
+`src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。PyAEDT 后端已包含 Student 版 executable、`ANSYSEMSV_ROOTxxx`、桌面版本推导、Student gRPC 检测补丁和独立 worker 进程隔离；后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
 
-`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、仿真 job 管理、PyAEDT 连接适配、PyAEDT 初始化超时保护、Touchstone 输出路径保护。
+`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、仿真 job 管理、PyAEDT 连接适配、PyAEDT Student gRPC 检测、PyAEDT worker 进程隔离、PyAEDT 初始化超时保护、Touchstone 输出路径保护。
 
 ## 设计原因
 

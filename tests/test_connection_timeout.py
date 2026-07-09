@@ -31,7 +31,7 @@ class ConnectionTimeoutTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_pyaedt_backend_times_out_hfss_initialization(self) -> None:
-        backend = PyAedtBackend()
+        backend = PyAedtBackend(use_process_worker=False)
         spec = ConnectionSpec(connect_timeout_seconds=0.01)
 
         with patch.object(backend, "_load_hfss_class", return_value=SlowHfss):
@@ -44,7 +44,7 @@ class ConnectionTimeoutTests(unittest.TestCase):
         self.assertIsNone(backend._hfss)
 
     def test_connect_hfss_timeout_marks_session_failed(self) -> None:
-        backend = PyAedtBackend()
+        backend = PyAedtBackend(use_process_worker=False)
         service = HfssService(
             backend,
             output_root=self.tmp,

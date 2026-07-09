@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import asdict, replace
+import multiprocessing as mp
+from multiprocessing.connection import Connection
 import os
 import queue
 import re
 import threading
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +26,17 @@ from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
 from hfss_agent_mcp.workflows.patch import build_patch_antenna
 
 
+_PYAEDT_STUDENT_GRPC_PATCH_LOCK = threading.RLock()
+_DEFAULT_WORKER_COMMAND_TIMEOUT_SECONDS = 300.0
+_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 5.0
+
+
 class PyAedtBackend:
     name = "pyaedt"
 
-    def __init__(self) -> None:
+    def __init__(self, *, use_process_worker: bool = True) -> None:
+        self._use_process_worker = use_process_worker
+        self._worker: _PyAedtWorkerClient | None = None
         self._hfss: Any | None = None
         self._student_version = False
 
@@ -35,14 +48,25 @@ class PyAedtBackend:
         except BackendUnavailableError as exc:
             available = False
             error = str(exc)
+        connected = self._hfss is not None
+        if self._use_process_worker and self._worker is not None:
+            connected = self._worker.is_alive
         return {
             "backend": self.name,
-            "connected": self._hfss is not None,
+            "connected": connected,
             "hfss_available": available,
             "error": error,
         }
 
     def connect(self, spec: ConnectionSpec) -> dict[str, Any]:
+        self._student_version = spec.student_version
+        if self._use_process_worker:
+            return self._call_worker(
+                "connect",
+                {"spec": asdict(spec)},
+                timeout_seconds=spec.connect_timeout_seconds,
+            )
+
         self._prepare_pyaedt_environment(spec)
         Hfss = self._load_hfss_class()
         kwargs: dict[str, Any] = {
@@ -50,7 +74,6 @@ class PyAedtBackend:
             "non_graphical": spec.non_graphical,
             "student_version": spec.student_version,
         }
-        self._student_version = spec.student_version
         if spec.project_path:
             kwargs["project"] = spec.project_path
         if spec.design_name:
@@ -65,10 +88,14 @@ class PyAedtBackend:
             Hfss,
             kwargs,
             spec.connect_timeout_seconds,
+            student_version=spec.student_version,
         )
         return self.get_project_info()
 
     def get_project_info(self) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("get_project_info", {})
+
         self._require_connection()
         designs = _coerce_list(
             getattr(self._hfss, "design_list", None)
@@ -92,22 +119,34 @@ class PyAedtBackend:
         }
 
     def create_project(self, spec: ProjectSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_project", {"spec": asdict(spec)})
+
         Hfss = self._load_hfss_class()
-        self._hfss = Hfss(
-            project=spec.project_path,
-            new_desktop=True,
-            non_graphical=True,
-            student_version=self._student_version,
-        )
+        with _student_grpc_detection_patch(self._student_version):
+            self._hfss = Hfss(
+                project=spec.project_path,
+                new_desktop=True,
+                non_graphical=True,
+                student_version=self._student_version,
+            )
         save_project = getattr(self._hfss, "save_project", None)
         if callable(save_project):
             save_project(spec.project_path)
         return self.get_project_info()
 
     def open_project(self, path: Path) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("open_project", {"path": str(path)})
         return self.connect(ConnectionSpec(project_path=str(path)))
 
     def save_project(self, path: Path | None = None) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker(
+                "save_project",
+                {"path": str(path) if path is not None else None},
+            )
+
         self._require_connection()
         save_project = getattr(self._hfss, "save_project", None)
         if not callable(save_project):
@@ -118,6 +157,9 @@ class PyAedtBackend:
         return data
 
     def close_project(self, save: bool = False) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("close_project", {"save": save})
+
         self._require_connection()
         if save:
             self.save_project()
@@ -134,6 +176,9 @@ class PyAedtBackend:
         raise BackendUnavailableError("The active PyAEDT object does not expose a close project API.")
 
     def create_design(self, spec: DesignSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_design", {"spec": asdict(spec)})
+
         self._require_connection()
         insert_design = getattr(self._hfss, "insert_design", None)
         if not callable(insert_design):
@@ -142,6 +187,9 @@ class PyAedtBackend:
         return self.get_project_info()
 
     def set_active_design(self, design_name: str) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("set_active_design", {"design_name": design_name})
+
         self._require_connection()
         set_active_design = getattr(self._hfss, "set_active_design", None)
         if not callable(set_active_design):
@@ -150,6 +198,9 @@ class PyAedtBackend:
         return self.get_project_info()
 
     def get_design_summary(self, design_name: str | None = None) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("get_design_summary", {"design_name": design_name})
+
         if design_name:
             self.set_active_design(design_name)
         data = self.get_project_info()
@@ -158,6 +209,9 @@ class PyAedtBackend:
         return data
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_patch_antenna", {"spec": asdict(spec)})
+
         self._require_connection()
         recipe = build_patch_antenna(spec)
         created_objects: list[str] = []
@@ -171,6 +225,9 @@ class PyAedtBackend:
         return recipe
 
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_setup", {"spec": asdict(spec)})
+
         self._require_connection()
         setup = self._hfss.create_setup(name=spec.setup_name)
         setup.props["Frequency"] = f"{spec.frequency_ghz}GHz"
@@ -192,6 +249,9 @@ class PyAedtBackend:
         return data
 
     def create_frequency_sweep(self, spec: SweepSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_frequency_sweep", {"spec": asdict(spec)})
+
         self._require_connection()
         self._hfss.create_linear_count_sweep(
             setup=spec.setup_name,
@@ -205,6 +265,9 @@ class PyAedtBackend:
         return sweep_to_dict(spec)
 
     def validate_design(self) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("validate_design", {})
+
         self._require_connection()
         result = self._hfss.validate_design()
         valid = bool(result)
@@ -216,6 +279,9 @@ class PyAedtBackend:
         }
 
     def run_simulation(self, setup_name: str) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("run_simulation", {"setup_name": setup_name}, timeout_seconds=None)
+
         self._require_connection()
         result = self._hfss.analyze(setup=setup_name)
         return {"setup_name": setup_name, "status": "completed" if result else "failed"}
@@ -226,11 +292,24 @@ class PyAedtBackend:
         sweep_name: str | None,
         expression: str,
     ) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker(
+                "get_s_parameters",
+                {
+                    "setup_name": setup_name,
+                    "sweep_name": sweep_name,
+                    "expression": expression,
+                },
+            )
+
         raise BackendUnavailableError(
             "PyAEDT S-parameter extraction will be implemented after the first real HFSS smoke test."
         )
 
     def export_touchstone(self, path: Path) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("export_touchstone", {"path": str(path)})
+
         self._require_connection()
         result = self._hfss.export_touchstone(str(path))
         return {"path": str(path), "raw_result": str(result)}
@@ -334,16 +413,20 @@ class PyAedtBackend:
         hfss_class: Any,
         kwargs: dict[str, Any],
         timeout_seconds: float | None,
+        *,
+        student_version: bool = False,
     ) -> Any:
         if timeout_seconds is None:
-            return hfss_class(**kwargs)
+            with _student_grpc_detection_patch(student_version):
+                return hfss_class(**kwargs)
 
         result_queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
         timed_out = threading.Event()
 
         def worker() -> None:
             try:
-                hfss = hfss_class(**kwargs)
+                with _student_grpc_detection_patch(student_version):
+                    hfss = hfss_class(**kwargs)
             except BaseException as exc:
                 _put_result(result_queue, ("error", exc))
                 return
@@ -368,6 +451,16 @@ class PyAedtBackend:
         if status == "error":
             raise BackendUnavailableError(f"PyAEDT HFSS initialization failed: {value}") from value
         return value
+
+    def _call_worker(
+        self,
+        command: str,
+        args: dict[str, Any],
+        timeout_seconds: float | None = _DEFAULT_WORKER_COMMAND_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        if self._worker is None or not self._worker.is_alive:
+            self._worker = _PyAedtWorkerClient()
+        return self._worker.call(command, args, timeout_seconds=timeout_seconds)
 
 
 def _coerce_list(value: Any) -> list[str]:
@@ -406,3 +499,233 @@ def _release_late_hfss(hfss: Any) -> None:
             release_desktop(close_projects=False, close_desktop=False)
         except Exception:
             pass
+
+
+class _PyAedtWorkerClient:
+    def __init__(self) -> None:
+        self._ctx = mp.get_context("spawn")
+        self._parent_conn: Connection | None = None
+        self._process: mp.Process | None = None
+        self._lock = threading.Lock()
+        self._next_request_id = 0
+
+    @property
+    def is_alive(self) -> bool:
+        return bool(self._process and self._process.is_alive())
+
+    def call(
+        self,
+        command: str,
+        args: dict[str, Any],
+        timeout_seconds: float | None = _DEFAULT_WORKER_COMMAND_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        with self._lock:
+            self._ensure_started()
+            assert self._parent_conn is not None
+            request_id = self._next_request_id
+            self._next_request_id += 1
+            try:
+                self._parent_conn.send(
+                    {
+                        "id": request_id,
+                        "command": command,
+                        "args": args,
+                    }
+                )
+            except (BrokenPipeError, EOFError, OSError) as exc:
+                self._terminate()
+                raise BackendUnavailableError("PyAEDT worker process is not reachable.") from exc
+
+            effective_timeout = (
+                _DEFAULT_WORKER_COMMAND_TIMEOUT_SECONDS
+                if timeout_seconds is None
+                else timeout_seconds
+            )
+            if not self._parent_conn.poll(effective_timeout):
+                self._terminate()
+                raise SessionError(
+                    f"PyAEDT worker command '{command}' timed out after {effective_timeout:g} seconds."
+                )
+
+            try:
+                response = self._parent_conn.recv()
+            except (BrokenPipeError, EOFError, OSError) as exc:
+                self._terminate()
+                raise BackendUnavailableError("PyAEDT worker process exited before returning a response.") from exc
+
+            if response.get("id") != request_id:
+                raise BackendUnavailableError("PyAEDT worker returned an out-of-order response.")
+            if response.get("status") == "ok":
+                return response["data"]
+            _raise_worker_error(command, response)
+
+    def close(self) -> None:
+        with self._lock:
+            if self._parent_conn is not None and self.is_alive:
+                try:
+                    self._parent_conn.send({"id": -1, "command": "shutdown", "args": {}})
+                    self._parent_conn.poll(_WORKER_SHUTDOWN_TIMEOUT_SECONDS)
+                except (BrokenPipeError, EOFError, OSError):
+                    pass
+            self._terminate()
+
+    def _ensure_started(self) -> None:
+        if self.is_alive and self._parent_conn is not None:
+            return
+        self._terminate()
+        parent_conn, child_conn = self._ctx.Pipe()
+        process = self._ctx.Process(
+            target=_pyaedt_worker_main,
+            args=(child_conn,),
+            name="hfss-agent-pyaedt-worker",
+            daemon=False,
+        )
+        process.start()
+        child_conn.close()
+        self._parent_conn = parent_conn
+        self._process = process
+
+    def _terminate(self) -> None:
+        process = self._process
+        if process is not None and process.is_alive():
+            process.terminate()
+            process.join(timeout=_WORKER_SHUTDOWN_TIMEOUT_SECONDS)
+            if process.is_alive():
+                process.kill()
+                process.join(timeout=_WORKER_SHUTDOWN_TIMEOUT_SECONDS)
+        if self._parent_conn is not None:
+            try:
+                self._parent_conn.close()
+            except OSError:
+                pass
+        self._parent_conn = None
+        self._process = None
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+def _pyaedt_worker_main(conn: Connection) -> None:
+    backend = PyAedtBackend(use_process_worker=False)
+    while True:
+        try:
+            request = conn.recv()
+        except EOFError:
+            break
+        request_id = request.get("id")
+        command = request.get("command")
+        args = request.get("args", {})
+        if command == "shutdown":
+            conn.send({"id": request_id, "status": "ok", "data": {"shutdown": True}})
+            break
+        try:
+            data = _execute_worker_command(backend, command, args)
+        except BaseException as exc:
+            conn.send(
+                {
+                    "id": request_id,
+                    "status": "error",
+                    "error_type": exc.__class__.__name__,
+                    "message": str(exc),
+                    "traceback": traceback.format_exc(),
+                }
+            )
+            continue
+        conn.send({"id": request_id, "status": "ok", "data": data})
+
+
+def _execute_worker_command(backend: Any, command: str, args: dict[str, Any]) -> dict[str, Any]:
+    if command == "connect":
+        spec = replace(ConnectionSpec(**args["spec"]), connect_timeout_seconds=None)
+        return backend.connect(spec)
+    if command == "get_project_info":
+        return backend.get_project_info()
+    if command == "create_project":
+        return backend.create_project(ProjectSpec(**args["spec"]))
+    if command == "open_project":
+        return backend.open_project(Path(args["path"]))
+    if command == "save_project":
+        path = args.get("path")
+        return backend.save_project(Path(path) if path is not None else None)
+    if command == "close_project":
+        return backend.close_project(save=bool(args.get("save", False)))
+    if command == "create_design":
+        return backend.create_design(DesignSpec(**args["spec"]))
+    if command == "set_active_design":
+        return backend.set_active_design(args["design_name"])
+    if command == "get_design_summary":
+        return backend.get_design_summary(args.get("design_name"))
+    if command == "create_patch_antenna":
+        return backend.create_patch_antenna(PatchAntennaSpec(**args["spec"]))
+    if command == "create_setup":
+        return backend.create_setup(SetupSpec(**args["spec"]))
+    if command == "create_frequency_sweep":
+        return backend.create_frequency_sweep(SweepSpec(**args["spec"]))
+    if command == "validate_design":
+        return backend.validate_design()
+    if command == "run_simulation":
+        return backend.run_simulation(args["setup_name"])
+    if command == "get_s_parameters":
+        return backend.get_s_parameters(
+            args["setup_name"],
+            args.get("sweep_name"),
+            args["expression"],
+        )
+    if command == "export_touchstone":
+        return backend.export_touchstone(Path(args["path"]))
+    raise BackendUnavailableError(f"Unsupported PyAEDT worker command: {command}")
+
+
+def _raise_worker_error(command: str, response: dict[str, Any]) -> None:
+    message = response.get("message") or f"PyAEDT worker command '{command}' failed."
+    error_type = response.get("error_type")
+    if error_type == "SessionError":
+        raise SessionError(message)
+    if error_type in {"BackendUnavailableError", "InputValidationError"}:
+        raise BackendUnavailableError(message)
+    raise BackendUnavailableError(f"PyAEDT worker command '{command}' failed: {message}")
+
+
+@contextmanager
+def _student_grpc_detection_patch(
+    enabled: bool,
+    *,
+    desktop_module: Any | None = None,
+    active_sessions: Callable[..., dict[int, int]] | None = None,
+) -> Iterator[None]:
+    """Let PyAEDT's launch wait see Student AEDT gRPC ports on Windows."""
+    if not enabled:
+        yield
+        return
+
+    if desktop_module is None or active_sessions is None:
+        try:
+            import ansys.aedt.core.desktop as desktop_module
+            from ansys.aedt.core.generic.general_methods import active_sessions
+        except Exception:
+            yield
+            return
+
+    original_detector = getattr(desktop_module, "is_grpc_session_active", None)
+    if not callable(original_detector):
+        yield
+        return
+
+    def student_aware_detector(port: int, machine: str | None = None) -> bool:
+        if original_detector(port, machine):
+            return True
+        try:
+            student_sessions = active_sessions(student_version=True, non_graphical=None)
+        except Exception:
+            return False
+        return port in student_sessions.values()
+
+    with _PYAEDT_STUDENT_GRPC_PATCH_LOCK:
+        desktop_module.is_grpc_session_active = student_aware_detector
+        try:
+            yield
+        finally:
+            desktop_module.is_grpc_session_active = original_detector

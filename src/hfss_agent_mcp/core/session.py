@@ -40,6 +40,24 @@ class SessionRecord:
         self.desktop_version = spec.desktop_version or self.desktop_version
         self.updated_at = _utc_now()
 
+    def update_from_attempt(self, spec: ConnectionSpec) -> None:
+        self.status = "connecting"
+        self.owner = spec.owner or self.owner
+        self.machine = spec.machine or self.machine
+        self.port = spec.port or self.port
+        self.project_path = spec.project_path or self.project_path
+        self.design_name = spec.design_name or self.design_name
+        self.desktop_version = spec.desktop_version or self.desktop_version
+        if spec.connect_timeout_seconds is not None:
+            self.metadata["connect_timeout_seconds"] = spec.connect_timeout_seconds
+        self.metadata.pop("failure_reason", None)
+        self.updated_at = _utc_now()
+
+    def fail(self, reason: str) -> None:
+        self.status = "failed"
+        self.metadata["failure_reason"] = reason
+        self.updated_at = _utc_now()
+
     def release(self) -> None:
         self.status = "released"
         self.updated_at = _utc_now()
@@ -70,6 +88,12 @@ class SessionManager:
         return record
 
     def connect(self, spec: ConnectionSpec) -> SessionRecord:
+        record = self.begin_connect(spec)
+        record.update_from_connection(spec)
+        self.active_session_id = record.session_id
+        return record
+
+    def begin_connect(self, spec: ConnectionSpec) -> SessionRecord:
         if spec.session_id:
             record = self.require(spec.session_id)
             if record.status == "released":
@@ -82,8 +106,22 @@ class SessionManager:
                 owner=spec.owner,
             )
             self._records[record.session_id] = record
-        record.update_from_connection(spec)
+        record.update_from_attempt(spec)
         self.active_session_id = record.session_id
+        return record
+
+    def mark_connected(self, session_id: str, spec: ConnectionSpec) -> SessionRecord:
+        record = self.require(session_id)
+        if record.status == "released":
+            raise SessionError(f"Session {session_id!r} has already been released.")
+        record.update_from_connection(spec)
+        self.active_session_id = session_id
+        return record
+
+    def mark_failed(self, session_id: str, reason: str) -> SessionRecord:
+        record = self.require(session_id)
+        record.fail(reason)
+        self.active_session_id = session_id
         return record
 
     def list(self) -> list[SessionRecord]:

@@ -77,6 +77,7 @@ class EnvironmentTests(unittest.TestCase):
                 "HFSS_AGENT_LOG_LEVEL": "DEBUG",
                 "HFSS_AGENT_OUTPUT_ROOT": str(self.tmp / "out"),
                 "HFSS_AGENT_AEDT_EXECUTABLE": "C:\\Program Files\\AnsysEM\\v252\\Win64\\ansysedt.exe",
+                "HFSS_AGENT_CONNECT_TIMEOUT_SECONDS": "12.5",
             },
             clear=False,
         ):
@@ -92,6 +93,7 @@ class EnvironmentTests(unittest.TestCase):
             Path("C:\\Program Files\\AnsysEM\\v252\\Win64\\ansysedt.exe"),
             config.aedt_executable,
         )
+        self.assertEqual(12.5, config.connect_timeout_seconds)
 
 
 if __name__ == "__main__":

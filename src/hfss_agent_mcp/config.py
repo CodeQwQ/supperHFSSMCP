@@ -15,6 +15,7 @@ class ServerConfig:
     log_level: str = "INFO"
     output_root: Path = Path("outputs")
     aedt_executable: Path | None = None
+    connect_timeout_seconds: float = 60.0
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -28,4 +29,7 @@ class ServerConfig:
             log_level=os.getenv("HFSS_AGENT_LOG_LEVEL", cls.log_level),
             output_root=Path(os.getenv("HFSS_AGENT_OUTPUT_ROOT", str(cls.output_root))),
             aedt_executable=Path(aedt_executable) if aedt_executable else None,
+            connect_timeout_seconds=float(
+                os.getenv("HFSS_AGENT_CONNECT_TIMEOUT_SECONDS", str(cls.connect_timeout_seconds))
+            ),
         )

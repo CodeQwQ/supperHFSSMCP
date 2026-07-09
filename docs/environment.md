@@ -35,7 +35,7 @@ flowchart TD
 - `src/hfss_agent_mcp/core/environment.py`：采集 Python、包、PyAEDT、AEDT、服务配置和输出目录状态。
 - `src/hfss_agent_mcp/core/service.py`：提供 `env_check` 业务入口，并在 `health_check` 中返回环境摘要。
 - `src/hfss_agent_mcp/tools/session.py`：将 `env_check` 暴露为 MCP tool。
-- `src/hfss_agent_mcp/config.py`：新增 `aedt_executable` 配置项。
+- `src/hfss_agent_mcp/config.py`：管理 AEDT executable、连接超时和 MCP 服务配置项。
 - `tests/test_environment.py`：覆盖环境诊断、工具注册和配置读取。
 
 ## 配置项
@@ -49,6 +49,7 @@ flowchart TD
 | `HFSS_AGENT_LOG_LEVEL` | 日志级别 | `INFO` |
 | `HFSS_AGENT_OUTPUT_ROOT` | 受控输出目录 | `outputs` |
 | `HFSS_AGENT_AEDT_EXECUTABLE` | AEDT/HFSS 可执行文件路径 | 空 |
+| `HFSS_AGENT_CONNECT_TIMEOUT_SECONDS` | 连接真实后端时的初始化超时时间 | `60.0` |
 
 ## MCP Tool
 

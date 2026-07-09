@@ -36,15 +36,15 @@ flowchart TD
 
 `src/hfss_agent_mcp/tools/` 是工具暴露层。当前按 `session`、`design`、`antenna`、`simulation`、`results` 拆分，后续可以按团队权限、实验阶段或工具成熟度做分层暴露。
 
-`src/hfss_agent_mcp/core/` 是稳定业务层。`HfssService` 负责参数校验、统一返回结构、输出路径保护和下一步建议。MCP tool 和后续自建 CLI 都应优先复用这一层。
+`src/hfss_agent_mcp/core/` 是稳定业务层。`HfssService` 负责参数校验、统一返回结构、输出路径保护、连接尝试状态记录和下一步建议。MCP tool 和后续自建 CLI 都应优先复用这一层。
 
 `src/hfss_agent_mcp/workflows/` 是领域 workflow 层。当前包含贴片天线 recipe 生成逻辑，负责把频率、材料和尺寸参数转换为几何、材料、边界和端口计划。
 
 `src/hfss_agent_mcp/core/jobs.py` 是仿真 job 管理入口。当前提供进程内 job record，用于记录求解任务状态、开始/结束时间、失败原因和日志摘要。
 
-`src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。PyAEDT 后端已包含 Student 版 executable、`ANSYSEMSV_ROOTxxx` 和桌面版本推导适配；后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
+`src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。PyAEDT 后端已包含 Student 版 executable、`ANSYSEMSV_ROOTxxx`、桌面版本推导和初始化超时适配；后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
 
-`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、仿真 job 管理、PyAEDT 连接适配、Touchstone 输出路径保护。
+`tests/` 是离线验证入口。当前测试覆盖 MCP 工具注册、mock 工程/design 管理、贴片 workflow recipe、mock 贴片天线闭环、仿真 job 管理、PyAEDT 连接适配、PyAEDT 初始化超时保护、Touchstone 输出路径保护。
 
 ## 设计原因
 
@@ -65,6 +65,7 @@ flowchart TD
 - `get_session_info`：按 session id 查询会话状态。
 - `release_connection`：释放 MCP server 内部 session record。
 - `connect_hfss`：连接本地或远程 AEDT/HFSS 会话。
+- `connect_hfss` 支持 `connect_timeout_seconds`，后端初始化失败或超时时会返回结构化错误和 failed session record。
 - `get_project_info`：读取当前工程状态。
 - `create_project`：在受控工程目录下创建 HFSS project。
 - `open_project`：从受控工程目录打开 HFSS project。

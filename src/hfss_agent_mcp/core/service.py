@@ -7,7 +7,7 @@ from typing import Any, Callable
 from hfss_agent_mcp.backends.base import HfssBackend
 from hfss_agent_mcp.config import ServerConfig
 from hfss_agent_mcp.core.environment import collect_environment
-from hfss_agent_mcp.core.errors import HfssAgentError, InputValidationError
+from hfss_agent_mcp.core.errors import HfssAgentError, InputValidationError, SessionError
 from hfss_agent_mcp.core.jobs import JobManager
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
@@ -72,13 +72,17 @@ class HfssService:
         port: int | None = None,
         session_id: str | None = None,
         owner: str | None = None,
+        connect_timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
+        if connect_timeout_seconds is not None:
+            _require_positive("connect_timeout_seconds", connect_timeout_seconds)
         resolved_student_version = (
             student_version
             if student_version is not None
             else self._is_student_aedt_configured()
         )
         resolved_desktop_version = desktop_version or self._desktop_version_from_configured_aedt()
+        resolved_connect_timeout = connect_timeout_seconds or self.config.connect_timeout_seconds
         spec = ConnectionSpec(
             desktop_version=resolved_desktop_version,
             project_path=project_path,
@@ -88,21 +92,35 @@ class HfssService:
             new_desktop=new_desktop,
             student_version=resolved_student_version,
             aedt_executable=str(self.config.aedt_executable) if self.config.aedt_executable else None,
+            connect_timeout_seconds=resolved_connect_timeout,
             machine=machine,
             port=port,
             session_id=session_id,
             owner=owner,
         )
-        return self._call(
-            "Connected to HFSS session.",
-            lambda: self._connect_session(spec),
-            next_actions=[
-                "get_session_info",
-                "get_project_info",
-                "create_hfss_design",
-                "create_patch_antenna",
-            ],
-        )
+        next_actions = [
+            "get_session_info",
+            "get_project_info",
+            "create_hfss_design",
+            "create_patch_antenna",
+        ]
+        try:
+            return self._ok(
+                "Connected to HFSS session.",
+                self._connect_session(spec),
+                next_actions=next_actions,
+            )
+        except HfssAgentError as exc:
+            session = self._active_session_data()
+            data: dict[str, Any] = {"error_type": exc.__class__.__name__}
+            if session:
+                data["session"] = session
+            return ToolResponse(
+                status="error",
+                message=str(exc),
+                data=data,
+                next_actions=["get_session_info", "env_check", "connect_hfss"],
+            ).to_dict()
 
     def list_aedt_sessions(self) -> dict[str, Any]:
         return self._call(
@@ -438,9 +456,27 @@ class HfssService:
         return None
 
     def _connect_session(self, spec: ConnectionSpec) -> dict[str, Any]:
-        project = self.backend.connect(spec)
-        record = self.sessions.connect(spec)
+        record = self.sessions.begin_connect(spec)
+        try:
+            project = self.backend.connect(spec)
+        except HfssAgentError as exc:
+            self.sessions.mark_failed(record.session_id, str(exc))
+            raise
+        except Exception as exc:
+            message = f"HFSS backend connection failed: {exc}"
+            self.sessions.mark_failed(record.session_id, message)
+            raise SessionError(message) from exc
+        record = self.sessions.mark_connected(record.session_id, spec)
         return {"session": record.to_dict(), "project": project}
+
+    def _active_session_data(self) -> dict[str, Any] | None:
+        session_id = self.sessions.active_session_id
+        if not session_id:
+            return None
+        try:
+            return self.sessions.require(session_id).to_dict()
+        except HfssAgentError:
+            return None
 
     def _create_project(self, project_name: str, relative_path: str | None) -> dict[str, Any]:
         _require_non_empty("project_name", project_name)

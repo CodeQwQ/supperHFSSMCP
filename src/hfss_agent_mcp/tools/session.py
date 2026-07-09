@@ -74,6 +74,7 @@ def register(mcp: FastMCP, service: HfssService) -> None:
         port: int | None = None,
         session_id: str | None = None,
         owner: str | None = None,
+        connect_timeout_seconds: float | None = None,
     ) -> dict:
         return service.connect_hfss(
             desktop_version=desktop_version,
@@ -87,4 +88,5 @@ def register(mcp: FastMCP, service: HfssService) -> None:
             port=port,
             session_id=session_id,
             owner=owner,
+            connect_timeout_seconds=connect_timeout_seconds,
         )

@@ -26,6 +26,7 @@ class ConnectionSpec:
     new_desktop: bool = False
     student_version: bool = False
     aedt_executable: str | None = None
+    connect_timeout_seconds: float | None = None
     machine: str | None = None
     port: int | None = None
     session_id: str | None = None

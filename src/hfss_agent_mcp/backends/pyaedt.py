@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import queue
 import re
+import threading
 from pathlib import Path
 from typing import Any
 
-from hfss_agent_mcp.core.errors import BackendUnavailableError
+from hfss_agent_mcp.core.errors import BackendUnavailableError, SessionError
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
@@ -59,7 +61,11 @@ class PyAedtBackend:
             kwargs["machine"] = spec.machine
         if spec.port:
             kwargs["port"] = spec.port
-        self._hfss = Hfss(**kwargs)
+        self._hfss = self._create_hfss_with_timeout(
+            Hfss,
+            kwargs,
+            spec.connect_timeout_seconds,
+        )
         return self.get_project_info()
 
     def get_project_info(self) -> dict[str, Any]:
@@ -323,6 +329,46 @@ class PyAedtBackend:
         os.environ[f"ANSYSEM_ROOT{suffix}"] = root
         os.environ.pop(f"ANSYSEMSV_ROOT{suffix}", None)
 
+    @staticmethod
+    def _create_hfss_with_timeout(
+        hfss_class: Any,
+        kwargs: dict[str, Any],
+        timeout_seconds: float | None,
+    ) -> Any:
+        if timeout_seconds is None:
+            return hfss_class(**kwargs)
+
+        result_queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+        timed_out = threading.Event()
+
+        def worker() -> None:
+            try:
+                hfss = hfss_class(**kwargs)
+            except BaseException as exc:
+                _put_result(result_queue, ("error", exc))
+                return
+            if timed_out.is_set():
+                _release_late_hfss(hfss)
+                return
+            _put_result(result_queue, ("ok", hfss))
+
+        thread = threading.Thread(
+            target=worker,
+            name="pyaedt-hfss-connect",
+            daemon=True,
+        )
+        thread.start()
+        try:
+            status, value = result_queue.get(timeout=timeout_seconds)
+        except queue.Empty as exc:
+            timed_out.set()
+            raise SessionError(
+                f"PyAEDT HFSS initialization timed out after {timeout_seconds:g} seconds."
+            ) from exc
+        if status == "error":
+            raise BackendUnavailableError(f"PyAEDT HFSS initialization failed: {value}") from value
+        return value
+
 
 def _coerce_list(value: Any) -> list[str]:
     if value is None:
@@ -344,3 +390,19 @@ def _version_suffix_from_executable(executable: Path, desktop_version: str | Non
         if match:
             return match.group(1)
     return None
+
+
+def _put_result(result_queue: queue.Queue[tuple[str, Any]], result: tuple[str, Any]) -> None:
+    try:
+        result_queue.put_nowait(result)
+    except queue.Full:
+        pass
+
+
+def _release_late_hfss(hfss: Any) -> None:
+    release_desktop = getattr(hfss, "release_desktop", None)
+    if callable(release_desktop):
+        try:
+            release_desktop(close_projects=False, close_desktop=False)
+        except Exception:
+            pass

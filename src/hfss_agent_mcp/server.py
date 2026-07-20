@@ -29,7 +29,8 @@ def create_app(
         instructions=(
             "Use these tools to control HFSS through a bounded engineering workflow. "
             "Call health_check first, then connect_hfss, inspect project state, "
-            "create or modify designs, validate, solve, and read results."
+            "create or modify designs, validate, solve, and read results. "
+            "Automation tools run only server-registered scripts; never submit arbitrary code."
         ),
         host=resolved_config.host,
         port=resolved_config.port,

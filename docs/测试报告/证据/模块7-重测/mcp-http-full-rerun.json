@@ -1,0 +1,1356 @@
+{
+  "url": "http://127.0.0.1:8042/mcp",
+  "started_at": "2026-07-20T05:36:23Z",
+  "requests": [
+    {
+      "label": "initialize",
+      "success": true,
+      "duration_seconds": 0.031,
+      "result": {
+        "meta": null,
+        "protocolVersion": "2025-11-25",
+        "capabilities": {
+          "experimental": {},
+          "logging": null,
+          "prompts": {
+            "listChanged": false
+          },
+          "resources": {
+            "subscribe": false,
+            "listChanged": false
+          },
+          "tools": {
+            "listChanged": false
+          },
+          "completions": null,
+          "tasks": null
+        },
+        "serverInfo": {
+          "name": "HFSS Agent MCP",
+          "title": null,
+          "version": "1.28.1",
+          "websiteUrl": null,
+          "icons": null
+        },
+        "instructions": "Use these tools to control HFSS through a bounded engineering workflow. Call health_check first, then connect_hfss, inspect project state, create or modify designs, validate, solve, and read results. Automation tools run only server-registered scripts; never submit arbitrary code."
+      }
+    },
+    {
+      "label": "tools/list",
+      "success": true,
+      "duration_seconds": 0.015,
+      "result": {
+        "meta": null,
+        "nextCursor": null,
+        "tools": [
+          {
+            "name": "health_check",
+            "title": null,
+            "description": "Check whether the MCP server and selected HFSS backend are reachable.",
+            "inputSchema": {
+              "properties": {},
+              "title": "health_checkArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "env_check",
+            "title": null,
+            "description": "Inspect the server runtime environment, including Python, MCP packages, PyAEDT availability, AEDT executable detection, transport and output directory.",
+            "inputSchema": {
+              "properties": {},
+              "title": "env_checkArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "list_aedt_sessions",
+            "title": null,
+            "description": "List AEDT/HFSS session records known to this MCP server.",
+            "inputSchema": {
+              "properties": {},
+              "title": "list_aedt_sessionsArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "launch_aedt",
+            "title": null,
+            "description": "Create a managed AEDT/HFSS session record. This reserves an explicit session id before connect_hfss binds it to a backend connection.",
+            "inputSchema": {
+              "properties": {
+                "desktop_version": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Desktop Version"
+                },
+                "machine": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Machine"
+                },
+                "port": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Port"
+                },
+                "project_path": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Project Path"
+                },
+                "design_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Design Name"
+                },
+                "owner": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Owner"
+                },
+                "non_graphical": {
+                  "default": true,
+                  "title": "Non Graphical",
+                  "type": "boolean"
+                }
+              },
+              "title": "launch_aedtArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "get_session_info",
+            "title": null,
+            "description": "Get one managed AEDT/HFSS session record by explicit session id.",
+            "inputSchema": {
+              "properties": {
+                "session_id": {
+                  "title": "Session Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "session_id"
+              ],
+              "title": "get_session_infoArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "release_connection",
+            "title": null,
+            "description": "Release one managed AEDT/HFSS session record by explicit session id.",
+            "inputSchema": {
+              "properties": {
+                "session_id": {
+                  "title": "Session Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "session_id"
+              ],
+              "title": "release_connectionArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "connect_hfss",
+            "title": null,
+            "description": "Connect to an AEDT/HFSS session. Use machine and port for a remote gRPC AEDT service, or project_path/design_name for a local workflow.",
+            "inputSchema": {
+              "properties": {
+                "desktop_version": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Desktop Version"
+                },
+                "project_path": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Project Path"
+                },
+                "design_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Design Name"
+                },
+                "solution_type": {
+                  "default": "DrivenModal",
+                  "title": "Solution Type",
+                  "type": "string"
+                },
+                "non_graphical": {
+                  "default": true,
+                  "title": "Non Graphical",
+                  "type": "boolean"
+                },
+                "new_desktop": {
+                  "default": false,
+                  "title": "New Desktop",
+                  "type": "boolean"
+                },
+                "student_version": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Student Version"
+                },
+                "machine": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Machine"
+                },
+                "port": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Port"
+                },
+                "session_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Session Id"
+                },
+                "owner": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Owner"
+                },
+                "connect_timeout_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Connect Timeout Seconds"
+                }
+              },
+              "title": "connect_hfssArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "get_project_info",
+            "title": null,
+            "description": "Read the current HFSS project, design, object and setup state.",
+            "inputSchema": {
+              "properties": {},
+              "title": "get_project_infoArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "create_project",
+            "title": null,
+            "description": "Create a new HFSS project inside the managed server project workspace.",
+            "inputSchema": {
+              "properties": {
+                "project_name": {
+                  "title": "Project Name",
+                  "type": "string"
+                },
+                "relative_path": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Relative Path"
+                }
+              },
+              "required": [
+                "project_name"
+              ],
+              "title": "create_projectArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "open_project",
+            "title": null,
+            "description": "Open an HFSS project from the managed server project workspace.",
+            "inputSchema": {
+              "properties": {
+                "relative_path": {
+                  "title": "Relative Path",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "relative_path"
+              ],
+              "title": "open_projectArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "save_project",
+            "title": null,
+            "description": "Save the active HFSS project, optionally to a managed relative path.",
+            "inputSchema": {
+              "properties": {
+                "relative_path": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Relative Path"
+                }
+              },
+              "title": "save_projectArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "close_project",
+            "title": null,
+            "description": "Close the active HFSS project while keeping the MCP session available.",
+            "inputSchema": {
+              "properties": {
+                "save": {
+                  "default": false,
+                  "title": "Save",
+                  "type": "boolean"
+                }
+              },
+              "title": "close_projectArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "create_hfss_design",
+            "title": null,
+            "description": "Create or switch to an HFSS design inside the active AEDT project.",
+            "inputSchema": {
+              "properties": {
+                "design_name": {
+                  "title": "Design Name",
+                  "type": "string"
+                },
+                "project_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Project Name"
+                },
+                "solution_type": {
+                  "default": "DrivenModal",
+                  "title": "Solution Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "design_name"
+              ],
+              "title": "create_hfss_designArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "set_active_design",
+            "title": null,
+            "description": "Switch the active HFSS design inside the current project.",
+            "inputSchema": {
+              "properties": {
+                "design_name": {
+                  "title": "Design Name",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "design_name"
+              ],
+              "title": "set_active_designArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "get_design_summary",
+            "title": null,
+            "description": "Read object, setup and solution summary for an HFSS design.",
+            "inputSchema": {
+              "properties": {
+                "design_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Design Name"
+                }
+              },
+              "title": "get_design_summaryArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "create_patch_antenna",
+            "title": null,
+            "description": "Create a rectangular microstrip patch antenna workflow object. The backend creates substrate, ground, patch, feed and airbox objects, or returns the equivalent planned geometry in mock mode.",
+            "inputSchema": {
+              "properties": {
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "frequency_ghz": {
+                  "title": "Frequency Ghz",
+                  "type": "number"
+                },
+                "substrate_material": {
+                  "default": "FR4_epoxy",
+                  "title": "Substrate Material",
+                  "type": "string"
+                },
+                "conductor_material": {
+                  "default": "copper",
+                  "title": "Conductor Material",
+                  "type": "string"
+                },
+                "substrate_height_mm": {
+                  "default": 1.6,
+                  "title": "Substrate Height Mm",
+                  "type": "number"
+                },
+                "patch_length_mm": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Patch Length Mm"
+                },
+                "patch_width_mm": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Patch Width Mm"
+                },
+                "ground_length_mm": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Ground Length Mm"
+                },
+                "ground_width_mm": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Ground Width Mm"
+                },
+                "feed_offset_mm": {
+                  "default": 0.0,
+                  "title": "Feed Offset Mm",
+                  "type": "number"
+                },
+                "feed_width_mm": {
+                  "default": 3.0,
+                  "title": "Feed Width Mm",
+                  "type": "number"
+                },
+                "airbox_margin_mm": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Airbox Margin Mm"
+                },
+                "port_type": {
+                  "default": "lumped",
+                  "title": "Port Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "frequency_ghz"
+              ],
+              "title": "create_patch_antennaArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "create_simulation_setup",
+            "title": null,
+            "description": "Create an HFSS setup and linear frequency sweep.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "frequency_ghz": {
+                  "title": "Frequency Ghz",
+                  "type": "number"
+                },
+                "sweep_name": {
+                  "default": "Sweep1",
+                  "title": "Sweep Name",
+                  "type": "string"
+                },
+                "sweep_start_ghz": {
+                  "default": 1.0,
+                  "title": "Sweep Start Ghz",
+                  "type": "number"
+                },
+                "sweep_stop_ghz": {
+                  "default": 3.0,
+                  "title": "Sweep Stop Ghz",
+                  "type": "number"
+                },
+                "sweep_points": {
+                  "default": 201,
+                  "title": "Sweep Points",
+                  "type": "integer"
+                },
+                "sweep_type": {
+                  "default": "LinearCount",
+                  "title": "Sweep Type",
+                  "type": "string"
+                },
+                "max_delta_s": {
+                  "default": 0.02,
+                  "title": "Max Delta S",
+                  "type": "number"
+                },
+                "max_passes": {
+                  "default": 10,
+                  "title": "Max Passes",
+                  "type": "integer"
+                },
+                "min_passes": {
+                  "default": 1,
+                  "title": "Min Passes",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "setup_name",
+                "frequency_ghz"
+              ],
+              "title": "create_simulation_setupArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "create_frequency_sweep",
+            "title": null,
+            "description": "Create or replace a frequency sweep for an existing HFSS setup.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "sweep_name": {
+                  "title": "Sweep Name",
+                  "type": "string"
+                },
+                "sweep_start_ghz": {
+                  "title": "Sweep Start Ghz",
+                  "type": "number"
+                },
+                "sweep_stop_ghz": {
+                  "title": "Sweep Stop Ghz",
+                  "type": "number"
+                },
+                "sweep_points": {
+                  "title": "Sweep Points",
+                  "type": "integer"
+                },
+                "sweep_type": {
+                  "default": "LinearCount",
+                  "title": "Sweep Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "setup_name",
+                "sweep_name",
+                "sweep_start_ghz",
+                "sweep_stop_ghz",
+                "sweep_points"
+              ],
+              "title": "create_frequency_sweepArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "validate_design",
+            "title": null,
+            "description": "Validate the active HFSS design before solve.",
+            "inputSchema": {
+              "properties": {},
+              "title": "validate_designArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "run_simulation",
+            "title": null,
+            "description": "Run simulation for an existing HFSS setup and track it as a job.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "wait_for_completion": {
+                  "default": true,
+                  "title": "Wait For Completion",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "setup_name"
+              ],
+              "title": "run_simulationArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "get_simulation_job",
+            "title": null,
+            "description": "Read the status of a tracked simulation job.",
+            "inputSchema": {
+              "properties": {
+                "job_id": {
+                  "title": "Job Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "job_id"
+              ],
+              "title": "get_simulation_jobArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "get_s_parameters",
+            "title": null,
+            "description": "Read S-parameter summary data from the selected setup and sweep.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "sweep_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Sweep Name"
+                },
+                "expression": {
+                  "default": "dB(S(1,1))",
+                  "title": "Expression",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "setup_name"
+              ],
+              "title": "get_s_parametersArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "export_touchstone",
+            "title": null,
+            "description": "Export Touchstone data into the configured server output directory.",
+            "inputSchema": {
+              "properties": {
+                "relative_path": {
+                  "default": "touchstone/result.s1p",
+                  "title": "Relative Path",
+                  "type": "string"
+                }
+              },
+              "title": "export_touchstoneArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "analyze_s_parameters",
+            "title": null,
+            "description": "Analyze S-parameter resonance, bandwidth, VSWR, and target-frequency compliance.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "sweep_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Sweep Name"
+                },
+                "expression": {
+                  "default": "dB(S(1,1))",
+                  "title": "Expression",
+                  "type": "string"
+                },
+                "target_frequency_ghz": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Target Frequency Ghz"
+                },
+                "threshold_db": {
+                  "default": -10.0,
+                  "title": "Threshold Db",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "setup_name"
+              ],
+              "title": "analyze_s_parametersArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "analyze_input_impedance",
+            "title": null,
+            "description": "Analyze complex input impedance samples returned by an HFSS setup.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "sweep_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Sweep Name"
+                },
+                "expression": {
+                  "default": "Z(1,1)",
+                  "title": "Expression",
+                  "type": "string"
+                },
+                "target_frequency_ghz": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Target Frequency Ghz"
+                }
+              },
+              "required": [
+                "setup_name"
+              ],
+              "title": "analyze_input_impedanceArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "export_result_report",
+            "title": null,
+            "description": "Export retrieved S-parameter samples and analysis into JSON or CSV.",
+            "inputSchema": {
+              "properties": {
+                "setup_name": {
+                  "title": "Setup Name",
+                  "type": "string"
+                },
+                "relative_path": {
+                  "default": "results/report.json",
+                  "title": "Relative Path",
+                  "type": "string"
+                },
+                "sweep_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Sweep Name"
+                },
+                "expression": {
+                  "default": "dB(S(1,1))",
+                  "title": "Expression",
+                  "type": "string"
+                },
+                "target_frequency_ghz": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Target Frequency Ghz"
+                },
+                "threshold_db": {
+                  "default": -10.0,
+                  "title": "Threshold Db",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "setup_name"
+              ],
+              "title": "export_result_reportArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "list_automation_scripts",
+            "title": null,
+            "description": "List only the server-registered HFSS automation scripts. The agent cannot provide an arbitrary script path or executable code.",
+            "inputSchema": {
+              "properties": {},
+              "title": "list_automation_scriptsArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          },
+          {
+            "name": "run_automation_script",
+            "title": null,
+            "description": "Run one registered HFSS automation script through the native AEDT CLI, the PyAEDT CLI, or an attached AEDT COM session. Use operation=batch_solve only with a managed .aedt project path. Arbitrary code is not accepted.",
+            "inputSchema": {
+              "properties": {
+                "script_id": {
+                  "title": "Script Id",
+                  "type": "string"
+                },
+                "runner": {
+                  "default": "pyaedt",
+                  "title": "Runner",
+                  "type": "string"
+                },
+                "operation": {
+                  "default": "script",
+                  "title": "Operation",
+                  "type": "string"
+                },
+                "port": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Port"
+                },
+                "project_path": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Project Path"
+                },
+                "relative_output": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Relative Output"
+                },
+                "arguments": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Arguments"
+                }
+              },
+              "required": [
+                "script_id"
+              ],
+              "title": "run_automation_scriptArguments",
+              "type": "object"
+            },
+            "outputSchema": null,
+            "icons": null,
+            "annotations": null,
+            "meta": null,
+            "execution": null
+          }
+        ]
+      }
+    },
+    {
+      "label": "list_automation_scripts",
+      "success": true,
+      "duration_seconds": 0.0,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"Registered HFSS automation scripts retrieved.\",\n  \"data\": {\n    \"scripts\": [\n      {\n        \"script_id\": \"aedt_probe\",\n        \"path\": \"E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\aedt_probe.py\",\n        \"description\": \"Read the active AEDT project and design without changing the model.\"\n      }\n    ]\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"run_automation_script\"\n  ]\n}",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": null,
+        "isError": false
+      }
+    },
+    {
+      "label": "connect_hfss:53387",
+      "success": true,
+      "duration_seconds": 1.657,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"Connected to HFSS session.\",\n  \"data\": {\n    \"session\": {\n      \"session_id\": \"pyaedt-0001\",\n      \"backend\": \"pyaedt\",\n      \"status\": \"connected\",\n      \"owner\": null,\n      \"machine\": null,\n      \"port\": 53387,\n      \"project_path\": null,\n      \"design_name\": null,\n      \"desktop_version\": \"2025.2\",\n      \"created_at\": \"2026-07-20T05:36:24.030030+00:00\",\n      \"updated_at\": \"2026-07-20T05:36:25.681925+00:00\",\n      \"metadata\": {\n        \"connect_timeout_seconds\": 30.0\n      }\n    },\n    \"project\": {\n      \"backend\": \"pyaedt\",\n      \"connected\": true,\n      \"project_loaded\": true,\n      \"project_name\": \"Project14\",\n      \"project_path\": \"D:\\\\ansysProjects\\\\Project14.aedt\",\n      \"design_name\": \"HFSS_Module6_Verifier10\",\n      \"active_design\": \"HFSS_Module6_Verifier10\",\n      \"designs\": [\n        \"HFSS_8TW\",\n        \"HFSS_Module6_Verifier10\",\n        \"HFSS_Module6_Verifier7\",\n        \"HFSS_Module6_Verifier8\",\n        \"HFSS_Module6_Verifier9\"\n      ],\n      \"solution_type\": \"Modal\",\n      \"object_count\": 6,\n      \"objects\": [\n        \"Module6PatchVerifier10_airbox\",\n        \"Module6PatchVerifier10_feed\",\n        \"Module6PatchVerifier10_ground\",\n        \"Module6PatchVerifier10_lumped_port\",\n        \"Module6PatchVerifier10_patch\",\n        \"Module6PatchVerifier10_substrate\"\n      ]\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"get_session_info\",\n    \"get_project_info\",\n    \"create_hfss_design\",\n    \"create_patch_antenna\"\n  ]\n}",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": null,
+        "isError": false
+      }
+    },
+    {
+      "label": "connect_hfss:53388",
+      "success": true,
+      "duration_seconds": 0.078,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"Connected to HFSS session.\",\n  \"data\": {\n    \"session\": {\n      \"session_id\": \"pyaedt-0002\",\n      \"backend\": \"pyaedt\",\n      \"status\": \"connected\",\n      \"owner\": null,\n      \"machine\": null,\n      \"port\": 53388,\n      \"project_path\": null,\n      \"design_name\": null,\n      \"desktop_version\": \"2025.2\",\n      \"created_at\": \"2026-07-20T05:36:25.695204+00:00\",\n      \"updated_at\": \"2026-07-20T05:36:25.752134+00:00\",\n      \"metadata\": {\n        \"connect_timeout_seconds\": 30.0\n      }\n    },\n    \"project\": {\n      \"backend\": \"pyaedt\",\n      \"connected\": true,\n      \"project_loaded\": true,\n      \"project_name\": \"Project14\",\n      \"project_path\": \"D:\\\\ansysProjects\\\\Project14.aedt\",\n      \"design_name\": \"HFSS_Module6_Verifier10\",\n      \"active_design\": \"HFSS_Module6_Verifier10\",\n      \"designs\": [\n        \"HFSS_8TW\",\n        \"HFSS_Module6_Verifier10\",\n        \"HFSS_Module6_Verifier7\",\n        \"HFSS_Module6_Verifier8\",\n        \"HFSS_Module6_Verifier9\"\n      ],\n      \"solution_type\": \"Modal\",\n      \"object_count\": 6,\n      \"objects\": [\n        \"Module6PatchVerifier10_airbox\",\n        \"Module6PatchVerifier10_feed\",\n        \"Module6PatchVerifier10_ground\",\n        \"Module6PatchVerifier10_lumped_port\",\n        \"Module6PatchVerifier10_patch\",\n        \"Module6PatchVerifier10_substrate\"\n      ]\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"get_session_info\",\n    \"get_project_info\",\n    \"create_hfss_design\",\n    \"create_patch_antenna\"\n  ]\n}",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": null,
+        "isError": false
+      }
+    },
+    {
+      "label": "run_automation_script:pyaedt",
+      "success": true,
+      "duration_seconds": 6.609,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"HFSS automation operation finished.\",\n  \"data\": {\n    \"success\": true,\n    \"command\": [\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\.venv\\\\Scripts\\\\python.exe\",\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\pyaedt_student_bridge.py\",\n      \"--port\",\n      \"53387\"\n    ],\n    \"return_code\": 0,\n    \"stdout\": \"PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].\\nPyAEDT INFO: PyAEDT version 1.2.0.\\nPyAEDT INFO: Initializing Desktop session.\\nPyAEDT INFO: AEDT version 2025.2SV Student.\\nPyAEDT INFO: AEDT installation Path D:\\\\Ansys\\\\ANSYS Inc\\\\ANSYS Student\\\\v252\\\\AnsysEM\\nPyAEDT INFO: Connected to AEDT gRPC session on port 53387.\\nPyAEDT WARNING: Service Pack is not detected. PyAEDT is currently connecting in Insecure Mode.\\nPyAEDT WARNING: Please download and install latest Service Pack to use connect to AEDT in Secure Mode.\\nPyAEDT INFO: Non-graphical mode detected. Disabling Desktop logs.\\nPyAEDT Student bridge executed: E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\aedt_probe.py\\nPyAEDT INFO: Desktop has been released.\\n\",\n    \"stderr\": \"\",\n    \"duration_seconds\": 6.594,\n    \"log_path\": \"E:\\\\LLMproject\\\\HFSSagent\\\\outputs\\\\verification-module7-rerun-20260720\\\\scripts\\\\logs\\\\20260720T053625773031Z-python.log\",\n    \"artifact\": {\n      \"project_name\": \"Project14\",\n      \"design_name\": \"HFSS_Module6_Verifier10\",\n      \"script_id\": \"aedt_probe\",\n      \"arguments\": {\n        \"runner\": \"pyaedt\",\n        \"request_id\": \"module7-rerun-1784525785\"\n      },\n      \"success\": true\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"list_automation_scripts\",\n    \"get_project_info\"\n  ]\n}",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": null,
+        "isError": false
+      }
+    },
+    {
+      "label": "run_automation_script:native",
+      "success": true,
+      "duration_seconds": 10.844,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"HFSS automation operation finished.\",\n  \"data\": {\n    \"success\": true,\n    \"command\": [\n      \"D:\\\\Ansys\\\\ANSYS Inc\\\\ANSYS Student\\\\v252\\\\AnsysEM\\\\ansysedtsv.exe\",\n      \"-RunScriptAndExit\",\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\aedt_probe.py\"\n    ],\n    \"return_code\": 0,\n    \"stdout\": \"{\\\"project_name\\\": null, \\\"design_name\\\": null, \\\"script_id\\\": \\\"aedt_probe\\\", \\\"arguments\\\": {\\\"runner\\\": \\\"native\\\", \\\"request_id\\\": \\\"module7-rerun-1784525785\\\"}, \\\"success\\\": true}\\n\",\n    \"stderr\": \"\",\n    \"duration_seconds\": 10.828,\n    \"log_path\": \"E:\\\\LLMproject\\\\HFSSagent\\\\outputs\\\\verification-module7-rerun-20260720\\\\scripts\\\\logs\\\\20260720T053632384844Z-ansysedtsv.log\",\n    \"artifact\": {\n      \"project_name\": null,\n      \"design_name\": null,\n      \"script_id\": \"aedt_probe\",\n      \"arguments\": {\n        \"runner\": \"native\",\n        \"request_id\": \"module7-rerun-1784525785\"\n      },\n      \"success\": true\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"list_automation_scripts\",\n    \"get_project_info\"\n  ]\n}",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": null,
+        "isError": false
+      }
+    },
+    {
+      "label": "run_automation_script:com",
+      "success": true,
+      "duration_seconds": 0.062,
+      "result": {
+        "meta": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"error\",\n  \"message\": \"Unable to attach to active AEDT COM application: No active AEDT COM object was found. Tried Ansoft.ElectronicsDesktop: (-2147221005, '无效的类字符串', None, None); Ansoft.ElectronicsDesktop.2025.2: (-2147221005, '无效的类字符串', None, None)\",\n  \"data\": {\n    \"error_type\": \"RuntimeError\"\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"health_check\",\n    \"get_project_info\"\n  ]\n}",
+            "annotations": null,
+            "meta": null
+          }
+        ],
+        "structuredContent": null,
+        "isError": false
+      }
+    }
+  ],
+  "tool_names": [
+    "health_check",
+    "env_check",
+    "list_aedt_sessions",
+    "launch_aedt",
+    "get_session_info",
+    "release_connection",
+    "connect_hfss",
+    "get_project_info",
+    "create_project",
+    "open_project",
+    "save_project",
+    "close_project",
+    "create_hfss_design",
+    "set_active_design",
+    "get_design_summary",
+    "create_patch_antenna",
+    "create_simulation_setup",
+    "create_frequency_sweep",
+    "validate_design",
+    "run_simulation",
+    "get_simulation_job",
+    "get_s_parameters",
+    "export_touchstone",
+    "analyze_s_parameters",
+    "analyze_input_impedance",
+    "export_result_report",
+    "list_automation_scripts",
+    "run_automation_script"
+  ],
+  "connected_port": 53387,
+  "session_id": "31b1f4fedc984505b41ff19ad1ccad26",
+  "finished_at": "2026-07-20T05:36:43Z"
+}

@@ -14,8 +14,11 @@ class ServerConfig:
     port: int = 8000
     log_level: str = "INFO"
     output_root: Path = Path("outputs")
+    script_root: Path = Path("scripts")
     aedt_executable: Path | None = None
     connect_timeout_seconds: float = 60.0
+    cli_timeout_seconds: float = 300.0
+    com_progid: str | None = None
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -28,8 +31,13 @@ class ServerConfig:
             port=int(os.getenv("HFSS_AGENT_MCP_PORT", str(cls.port))),
             log_level=os.getenv("HFSS_AGENT_LOG_LEVEL", cls.log_level),
             output_root=Path(os.getenv("HFSS_AGENT_OUTPUT_ROOT", str(cls.output_root))),
+            script_root=Path(os.getenv("HFSS_AGENT_SCRIPT_ROOT", str(cls.script_root))),
             aedt_executable=Path(aedt_executable) if aedt_executable else None,
             connect_timeout_seconds=float(
                 os.getenv("HFSS_AGENT_CONNECT_TIMEOUT_SECONDS", str(cls.connect_timeout_seconds))
             ),
+            cli_timeout_seconds=float(
+                os.getenv("HFSS_AGENT_CLI_TIMEOUT_SECONDS", str(cls.cli_timeout_seconds))
+            ),
+            com_progid=os.getenv("HFSS_AGENT_COM_PROGID") or None,
         )

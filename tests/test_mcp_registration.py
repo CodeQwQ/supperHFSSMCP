@@ -46,6 +46,8 @@ class McpRegistrationTests(unittest.TestCase):
                 "analyze_s_parameters",
                 "analyze_input_impedance",
                 "export_result_report",
+                "list_automation_scripts",
+                "run_automation_script",
             },
             names,
         )

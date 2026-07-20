@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from mcp.server.fastmcp import FastMCP
 
 from hfss_agent_mcp.core.service import HfssService
-from hfss_agent_mcp.tools import antenna, design, results, session, simulation
+from hfss_agent_mcp.tools import antenna, automation, design, results, session, simulation
 
 TOOL_GROUPS = {
     "session": session.register,
@@ -13,6 +13,7 @@ TOOL_GROUPS = {
     "antenna": antenna.register,
     "simulation": simulation.register,
     "results": results.register,
+    "automation": automation.register,
 }
 
 

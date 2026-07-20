@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import re
+import shutil
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
 from hfss_agent_mcp.backends.base import HfssBackend
+from hfss_agent_mcp.backends.cli_runner import CliRunner
+from hfss_agent_mcp.backends.com import ComAdapter
 from hfss_agent_mcp.config import ServerConfig
 from hfss_agent_mcp.core.environment import collect_environment
 from hfss_agent_mcp.core.errors import HfssAgentError, InputValidationError, SessionError
@@ -22,6 +26,7 @@ from hfss_agent_mcp.core.models import (
 from hfss_agent_mcp.core.project import ProjectPathPolicy
 from hfss_agent_mcp.core.results import analyze_input_impedance, analyze_s_parameter_points
 from hfss_agent_mcp.core.session import SessionManager
+from hfss_agent_mcp.core.scripts import ScriptRegistry
 from hfss_agent_mcp.results.analysis import build_result_report, write_result_report
 
 
@@ -38,6 +43,17 @@ class HfssService:
         self.sessions = SessionManager(backend.name)
         self.project_paths = ProjectPathPolicy(self.output_root / "projects")
         self.jobs = JobManager()
+        self.script_registry = ScriptRegistry(self.config.script_root)
+        self.script_registry.register(
+            "aedt_probe",
+            "aedt_probe.py",
+            "Read the active AEDT project and design without changing the model.",
+        )
+        self.com_adapter = ComAdapter(
+            self.script_registry.root,
+            self.output_root,
+            progid=self.config.com_progid,
+        )
 
     def health_check(self) -> dict[str, Any]:
         environment = self._environment_data()
@@ -112,7 +128,7 @@ class HfssService:
                 self._connect_session(spec),
                 next_actions=next_actions,
             )
-        except HfssAgentError as exc:
+        except (HfssAgentError, ValueError, RuntimeError, OSError) as exc:
             session = self._active_session_data()
             data: dict[str, Any] = {"error_type": exc.__class__.__name__}
             if session:
@@ -425,6 +441,38 @@ class HfssService:
             next_actions=["analyze_s_parameters", "export_touchstone", "create_patch_antenna"],
         )
 
+    def list_automation_scripts(self) -> dict[str, Any]:
+        return self._call(
+            "Registered HFSS automation scripts retrieved.",
+            lambda: {"scripts": self.script_registry.list()},
+            next_actions=["run_automation_script"],
+        )
+
+    def run_automation_script(
+        self,
+        script_id: str,
+        runner: str = "pyaedt",
+        operation: str = "script",
+        port: int | None = None,
+        project_path: str | None = None,
+        relative_output: str | None = None,
+        arguments: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload_arguments = arguments or {}
+        return self._call(
+            "HFSS automation operation finished.",
+            lambda: self._run_automation(
+                script_id=script_id,
+                runner=runner,
+                operation=operation,
+                port=port,
+                project_path=project_path,
+                relative_output=relative_output,
+                arguments=payload_arguments,
+            ),
+            next_actions=["list_automation_scripts", "get_project_info"],
+        )
+
     def analyze_s_parameters(
         self,
         setup_name: str,
@@ -561,6 +609,92 @@ class HfssService:
             raise InputValidationError("relative_path must stay inside HFSS_AGENT_OUTPUT_ROOT.")
         return candidate
 
+    def _run_automation(
+        self,
+        script_id: str,
+        runner: str,
+        operation: str,
+        port: int | None,
+        project_path: str | None,
+        relative_output: str | None,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        _require_non_empty("script_id", script_id)
+        _require_non_empty("runner", runner)
+        _require_non_empty("operation", operation)
+        if runner not in {"native", "pyaedt", "com"}:
+            raise InputValidationError("runner must be one of: native, pyaedt, com.")
+        if operation not in {"script", "batch_solve"}:
+            raise InputValidationError("operation must be one of: script, batch_solve.")
+        if operation == "batch_solve" and runner != "native":
+            raise InputValidationError("batch_solve currently requires the native runner.")
+        if port is not None:
+            _require_positive("port", port)
+        if operation == "batch_solve" and not project_path:
+            raise InputValidationError("project_path is required for batch_solve.")
+        definition = self.script_registry.require(script_id)
+        output_path = self._safe_output_path(relative_output or f"scripts/{script_id}.json")
+        executable = self.config.aedt_executable
+        if runner == "pyaedt":
+            if port is None:
+                raise InputValidationError("port is required for the pyaedt runner.")
+            pyaedt_executable = self._find_pyaedt_cli()
+            if pyaedt_executable is None:
+                raise InputValidationError(
+                    "PyAEDT CLI was not found. Install ansys-aedt-core or configure the server virtual environment."
+                )
+            return CliRunner(
+                pyaedt_executable,
+                self.output_root,
+                self.config.cli_timeout_seconds,
+            ).run_pyaedt(
+                definition,
+                arguments,
+                port,
+                registry=self.script_registry,
+                output_path=output_path,
+                student_version=self._is_student_aedt_configured(),
+                student_bridge=self.script_registry.root / "pyaedt_student_bridge.py",
+            )
+        if runner == "native":
+            if executable is None or not executable.is_file():
+                raise InputValidationError(
+                    "AEDT executable is not configured. Set HFSS_AGENT_AEDT_EXECUTABLE."
+                )
+            cli = CliRunner(executable, self.output_root, self.config.cli_timeout_seconds)
+            if operation == "batch_solve":
+                project = Path(project_path or "").expanduser().resolve()
+                if self.output_root not in project.parents and project != self.output_root:
+                    raise InputValidationError(
+                        "project_path must stay inside HFSS_AGENT_OUTPUT_ROOT."
+                    )
+                return cli.run_batch_solve(project)
+            return cli.run_native(
+                definition,
+                arguments,
+                registry=self.script_registry,
+                output_path=output_path,
+            )
+        desktop = self.com_adapter.connect()
+        return self.com_adapter.run(
+            desktop,
+            definition,
+            arguments,
+            registry=self.script_registry,
+            output_path=output_path,
+        )
+
+    @staticmethod
+    def _find_pyaedt_cli() -> Path | None:
+        candidates = [Path(sys.executable).with_name("pyaedt.exe"), Path(sys.executable).with_name("pyaedt")]
+        found = shutil.which("pyaedt")
+        if found:
+            candidates.append(Path(found))
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate.resolve()
+        return None
+
     def _environment_data(self) -> dict[str, Any]:
         return collect_environment(self.config, self.backend.health())
 
@@ -658,7 +792,7 @@ class HfssService:
     ) -> dict[str, Any]:
         try:
             return self._ok(message, operation(), next_actions=next_actions)
-        except HfssAgentError as exc:
+        except (HfssAgentError, ValueError, RuntimeError, OSError) as exc:
             return ToolResponse(
                 status="error",
                 message=str(exc),

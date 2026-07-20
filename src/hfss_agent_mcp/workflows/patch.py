@@ -52,7 +52,7 @@ def build_patch_antenna(spec: PatchAntennaSpec) -> dict[str, Any]:
         PortAssignment(
             name=object_names["port"],
             port_type=spec.port_type,
-            objects=(object_names["feed"], object_names["ground"]),
+            objects=(object_names["port"],),
             integration_line_mm=(
                 (0.0, -dimensions.ground_length_mm / 2, dimensions.substrate_height_mm),
                 (0.0, -dimensions.ground_length_mm / 2, 0.0),
@@ -177,6 +177,15 @@ def _build_geometry(
             origin_mm=(-spec.feed_width_mm / 2, -ground_length / 2, substrate_height),
             size_mm=(spec.feed_width_mm, feed_length, 0.0),
             material=spec.conductor_material,
+        ),
+        GeometryPrimitive(
+            name=object_names["port"],
+            role="port",
+            kind="sheet",
+            origin_mm=(-dimensions.feed_width_mm / 2, -ground_length / 2, 0.0),
+            size_mm=(dimensions.feed_width_mm, substrate_height, 0.0),
+            material="air",
+            metadata={"orientation": "XZ", "port_sheet": True},
         ),
         GeometryPrimitive(
             name=object_names["airbox"],

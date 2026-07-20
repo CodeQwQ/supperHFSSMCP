@@ -43,6 +43,9 @@ class McpRegistrationTests(unittest.TestCase):
                 "get_simulation_job",
                 "get_s_parameters",
                 "export_touchstone",
+                "analyze_s_parameters",
+                "analyze_input_impedance",
+                "export_result_report",
             },
             names,
         )

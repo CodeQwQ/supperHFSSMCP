@@ -57,7 +57,10 @@ class PatchWorkflowTests(unittest.TestCase):
         self.assertGreater(recipe["dimensions_mm"]["patch_length_mm"], 28)
         self.assertLess(recipe["dimensions_mm"]["patch_length_mm"], 32)
         self.assertGreater(recipe["dimensions_mm"]["airbox_height_mm"], 30)
-        self.assertEqual(5, len(recipe["geometry"]))
+        self.assertEqual(6, len(recipe["geometry"]))
+        port_sheet = next(item for item in recipe["geometry"] if item["role"] == "port")
+        self.assertEqual("XZ", port_sheet["metadata"]["orientation"])
+        self.assertEqual(("Patch2G4_lumped_port",), recipe["ports"][0]["objects"])
 
     def test_create_patch_antenna_persists_recipe_on_active_mock_design(self) -> None:
         result = self.service.create_patch_antenna(

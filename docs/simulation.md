@@ -26,6 +26,20 @@ flowchart TD
     G --> H["AEDT / HFSS"]
 ```
 
+## 2026-07-20 兼容性修正
+
+真实 HFSS 验证发现当前 `ansys.aedt.core` 的 `Hfss.create_linear_count_sweep` 参数名为 `unit`，不是 `units`，且 `sweep_type` 只接受 `Discrete`、`Interpolating` 或 `Fast`。`src/hfss_agent_mcp/backends/pyaedt.py` 已将 `unit` 参数和内部 `LinearCount -> Discrete` 映射补齐，并新增回归测试。真实 MCP 验证应优先通过 `create_simulation_setup` 检查 setup 和 sweep 是否真正创建成功。
+
+官方接口：[Hfss.create_linear_count_sweep](https://aedt.docs.pyansys.com/version/stable/API/_autosummary/ansys.aedt.core.hfss.Hfss.create_linear_count_sweep.html)
+
+## 2026-07-20 重测 5 真实阻塞
+
+真实 Student 2025 R2 HTTP MCP 验证确认 `create_simulation_setup` 和 `create_frequency_sweep` 已能创建 101 点 `LinearCount` sweep，但 `validate_design` 不能直接调用不存在的 PyAEDT 方法，真实 setup 求解也返回 `failed`。详见：
+
+- `docs/测试问题/PyAEDT真实设计校验接口缺失.md`
+- `docs/测试问题/PyAEDT真实求解失败.md`
+- `docs/测试报告/模块6-真实HFSS验证-2026-07-20-重测5.md`
+
 ## 核心文件
 
 - `src/hfss_agent_mcp/core/jobs.py`：定义 `JobRecord` 和 `JobManager`。
@@ -70,6 +84,8 @@ flowchart TD
 
 ### `validate_design`
 
+真实 PyAEDT 后端通过 `Hfss.validate_full_design()` 执行 HFSS 的设计校验，并把校验消息转换为服务层统一的 `valid`、`errors`、`warnings`、`messages` 字段。不能调用不存在的 `Hfss.validate_design()`。
+
 验证当前 active design。返回结构化字段：
 - `valid`
 - `errors`
@@ -79,6 +95,8 @@ flowchart TD
 - `sweep_count`
 
 ### `run_simulation`
+
+PyAEDT 适配器对真实 HFSS 使用 `analyze_setup(name=..., blocking=True)` 直接提交指定 setup。这里不调用高层 `Hfss.analyze(setup=...)`，因为该高层方法会先执行工程保存；在 Student AEDT 的已有 gRPC 会话中，保存可能被 AEDT 拒绝并阻断求解。该适配策略保留 setup 级求解能力，同时避免把保存工程和求解动作强耦合。
 
 启动 setup 求解，并创建 job record。
 

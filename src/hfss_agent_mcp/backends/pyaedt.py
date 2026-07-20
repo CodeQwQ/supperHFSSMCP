@@ -255,12 +255,12 @@ class PyAedtBackend:
         self._require_connection()
         self._hfss.create_linear_count_sweep(
             setup=spec.setup_name,
-            units="GHz",
+            unit="GHz",
             start_frequency=spec.sweep_start_ghz,
             stop_frequency=spec.sweep_stop_ghz,
             num_of_freq_points=spec.sweep_points,
             name=spec.sweep_name,
-            sweep_type=spec.sweep_type,
+            sweep_type=_pyaedt_sweep_type(spec.sweep_type),
         )
         return sweep_to_dict(spec)
 
@@ -269,13 +269,17 @@ class PyAedtBackend:
             return self._call_worker("validate_design", {})
 
         self._require_connection()
-        result = self._hfss.validate_design()
-        valid = bool(result)
+        validate_full_design = getattr(self._hfss, "validate_full_design", None)
+        if not callable(validate_full_design):
+            raise BackendUnavailableError("The active PyAEDT object does not expose validate_full_design.")
+        validation = validate_full_design()
+        messages, valid = validation if isinstance(validation, tuple) and len(validation) == 2 else ([], bool(validation))
         return {
-            "valid": valid,
-            "errors": [] if valid else [str(result)],
+            "valid": bool(valid),
+            "errors": [] if valid else [str(message) for message in messages],
             "warnings": [],
-            "raw_result": str(result),
+            "messages": [str(message) for message in messages],
+            "raw_result": str(validation),
         }
 
     def run_simulation(self, setup_name: str) -> dict[str, Any]:
@@ -283,7 +287,13 @@ class PyAedtBackend:
             return self._call_worker("run_simulation", {"setup_name": setup_name}, timeout_seconds=None)
 
         self._require_connection()
-        result = self._hfss.analyze(setup=setup_name)
+        analyze_setup = getattr(self._hfss, "analyze_setup", None)
+        if not callable(analyze_setup):
+            raise BackendUnavailableError("The active PyAEDT object does not expose analyze_setup.")
+        # Hfss.analyze() saves the active project before solving. Student AEDT
+        # sessions can reject that save through gRPC, while AnalyzeSetup is the
+        # direct AEDT operation needed by this adapter.
+        result = analyze_setup(name=setup_name, blocking=True)
         return {"setup_name": setup_name, "status": "completed" if result else "failed"}
 
     def get_s_parameters(
@@ -302,9 +312,32 @@ class PyAedtBackend:
                 },
             )
 
-        raise BackendUnavailableError(
-            "PyAEDT S-parameter extraction will be implemented after the first real HFSS smoke test."
+        self._require_connection()
+        post = getattr(self._hfss, "post", None)
+        get_solution_data = getattr(post, "get_solution_data", None)
+        if not callable(get_solution_data):
+            raise BackendUnavailableError("PyAEDT HFSS session does not expose post.get_solution_data.")
+
+        setup_sweep_name = setup_name
+        if sweep_name:
+            setup_sweep_name = f"{setup_name} : {sweep_name}"
+        solution = get_solution_data(
+            expressions=expression,
+            setup_sweep_name=setup_sweep_name,
+            domain="Sweep",
         )
+        if not solution:
+            raise BackendUnavailableError(
+                f"No solution data was returned for {setup_sweep_name!r} and {expression!r}."
+            )
+        points = _solution_data_to_points(solution, expression)
+        return {
+            "setup_name": setup_name,
+            "sweep_name": sweep_name,
+            "expression": expression,
+            "solved": True,
+            "sample_points": points,
+        }
 
     def export_touchstone(self, path: Path) -> dict[str, Any]:
         if self._use_process_worker:
@@ -338,7 +371,7 @@ class PyAedtBackend:
         if not callable(create_rectangle):
             raise BackendUnavailableError("PyAEDT modeler does not expose create_rectangle.")
         create_rectangle(
-            orientation="XY",
+            orientation=primitive.get("metadata", {}).get("orientation", "XY"),
             origin=origin,
             sizes=[size[0], size[1]],
             name=name,
@@ -366,8 +399,10 @@ class PyAedtBackend:
         if not callable(lumped_port):
             raise BackendUnavailableError("The active PyAEDT object does not expose lumped_port.")
         start, end = port["integration_line_mm"]
+        objects = list(port["objects"])
+        assignment = objects[0] if len(objects) == 1 else objects
         lumped_port(
-            assignment=list(port["objects"]),
+            assignment=assignment,
             integration_line=[list(start), list(end)],
             impedance=port["impedance_ohm"],
             name=port["name"],
@@ -483,6 +518,13 @@ def _version_suffix_from_executable(executable: Path, desktop_version: str | Non
         if match:
             return match.group(1)
     return None
+
+
+def _pyaedt_sweep_type(sweep_type: str) -> str:
+    """Map the service's legacy method label to PyAEDT's accepted values."""
+    if sweep_type.strip().lower() in {"linearcount", "linear_count"}:
+        return "Discrete"
+    return sweep_type
 
 
 def _put_result(result_queue: queue.Queue[tuple[str, Any]], result: tuple[str, Any]) -> None:
@@ -677,6 +719,60 @@ def _execute_worker_command(backend: Any, command: str, args: dict[str, Any]) ->
     if command == "export_touchstone":
         return backend.export_touchstone(Path(args["path"]))
     raise BackendUnavailableError(f"Unsupported PyAEDT worker command: {command}")
+
+
+def _solution_data_to_points(solution: Any, expression: str) -> list[dict[str, float]]:
+    """Convert PyAEDT SolutionData into transport-safe frequency samples."""
+    raw_frequencies = getattr(solution, "primary_sweep_values", None)
+    frequencies = [] if raw_frequencies is None else list(raw_frequencies)
+    if not frequencies:
+        raise BackendUnavailableError("PyAEDT returned solution data without a primary frequency sweep.")
+
+    is_db_expression = expression.strip().lower().startswith("db(")
+    db_formula = "real" if is_db_expression else "db20"
+    try:
+        _, db_values = solution.get_expression_data(expression, formula=db_formula)
+    except Exception as exc:
+        raise BackendUnavailableError(
+            f"Unable to extract dB values for expression {expression!r}: {exc}"
+        ) from exc
+
+    real_values: list[Any] = []
+    imag_values: list[Any] = []
+    try:
+        _, real_values = solution.get_expression_data(expression, formula="real")
+        _, imag_values = solution.get_expression_data(expression, formula="imag")
+    except Exception:
+        # Some AEDT report expressions are real-only; dB data remains usable.
+        real_values = []
+        imag_values = []
+
+    points: list[dict[str, float]] = []
+    for index, frequency in enumerate(frequencies):
+        point = {
+            "frequency_ghz": _frequency_to_ghz(frequency),
+            "value_db": float(db_values[index]),
+        }
+        if index < len(real_values) and index < len(imag_values):
+            real = float(real_values[index])
+            imag = float(imag_values[index])
+            point["real"] = real
+            point["imag"] = imag
+            if expression.strip().lower().startswith("z("):
+                point["real_ohms"] = real
+                point["imag_ohms"] = imag
+        points.append(point)
+    return points
+
+
+def _frequency_to_ghz(value: Any) -> float:
+    text = str(value).strip()
+    units = (("ghz", 1.0), ("mhz", 1e-3), ("khz", 1e-6), ("hz", 1e-9))
+    lowered = text.lower()
+    for suffix, scale in units:
+        if lowered.endswith(suffix):
+            return float(lowered[: -len(suffix)].strip()) * scale
+    return float(value)
 
 
 def _raise_worker_error(command: str, response: dict[str, Any]) -> None:

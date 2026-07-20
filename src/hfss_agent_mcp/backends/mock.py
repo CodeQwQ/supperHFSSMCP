@@ -255,6 +255,21 @@ class MockHfssBackend:
         solved = setup_name in state["solved_setups"]
         resonance = setup.frequency_ghz
         min_s11 = -18.0 if solved else -3.0
+        if expression.strip().lower().startswith("z("):
+            impedance_points = [
+                {"frequency_ghz": setup.sweep_start_ghz, "real_ohms": 35.0, "imag_ohms": -12.0},
+                {"frequency_ghz": resonance, "real_ohms": 48.0, "imag_ohms": 3.0},
+                {"frequency_ghz": setup.sweep_stop_ghz, "real_ohms": 62.0, "imag_ohms": 15.0},
+            ]
+            for point in impedance_points:
+                point["value_db"] = 20.0
+            return {
+                "setup_name": setup_name,
+                "sweep_name": sweep_name or setup.sweep_name,
+                "expression": expression,
+                "solved": solved,
+                "sample_points": impedance_points,
+            }
         return {
             "setup_name": setup_name,
             "sweep_name": sweep_name or setup.sweep_name,

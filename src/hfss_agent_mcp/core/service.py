@@ -20,7 +20,9 @@ from hfss_agent_mcp.core.models import (
     ToolResponse,
 )
 from hfss_agent_mcp.core.project import ProjectPathPolicy
+from hfss_agent_mcp.core.results import analyze_input_impedance, analyze_s_parameter_points
 from hfss_agent_mcp.core.session import SessionManager
+from hfss_agent_mcp.results.analysis import build_result_report, write_result_report
 
 
 class HfssService:
@@ -420,8 +422,130 @@ class HfssService:
         return self._call(
             "S-parameter data retrieved.",
             lambda: self.backend.get_s_parameters(setup_name, sweep_name, expression),
-            next_actions=["export_touchstone", "create_patch_antenna"],
+            next_actions=["analyze_s_parameters", "export_touchstone", "create_patch_antenna"],
         )
+
+    def analyze_s_parameters(
+        self,
+        setup_name: str,
+        sweep_name: str | None = None,
+        expression: str = "dB(S(1,1))",
+        target_frequency_ghz: float | None = None,
+        threshold_db: float = -10.0,
+    ) -> dict[str, Any]:
+        _require_non_empty("setup_name", setup_name)
+        _require_non_empty("expression", expression)
+        if target_frequency_ghz is not None:
+            _require_positive("target_frequency_ghz", target_frequency_ghz)
+        return self._call(
+            "S-parameter analysis completed.",
+            lambda: self._analyze_s_parameters_data(
+                setup_name, sweep_name, expression, target_frequency_ghz, threshold_db
+            ),
+            next_actions=["export_result_report", "export_touchstone", "create_patch_antenna"],
+        )
+
+    def analyze_input_impedance(
+        self,
+        setup_name: str,
+        sweep_name: str | None = None,
+        expression: str = "Z(1,1)",
+        target_frequency_ghz: float | None = None,
+    ) -> dict[str, Any]:
+        _require_non_empty("setup_name", setup_name)
+        _require_non_empty("expression", expression)
+        if target_frequency_ghz is not None:
+            _require_positive("target_frequency_ghz", target_frequency_ghz)
+        return self._call(
+            "Input impedance analysis completed.",
+            lambda: self._analyze_input_impedance_data(
+                setup_name, sweep_name, expression, target_frequency_ghz
+            ),
+            next_actions=["export_result_report", "analyze_s_parameters"],
+        )
+
+    def export_result_report(
+        self,
+        setup_name: str,
+        relative_path: str = "results/report.json",
+        sweep_name: str | None = None,
+        expression: str = "dB(S(1,1))",
+        target_frequency_ghz: float | None = None,
+        threshold_db: float = -10.0,
+    ) -> dict[str, Any]:
+        _require_non_empty("setup_name", setup_name)
+        _require_non_empty("expression", expression)
+        return self._call(
+            "Result report exported.",
+            lambda: self._export_result_report_data(
+                setup_name,
+                relative_path,
+                sweep_name,
+                expression,
+                target_frequency_ghz,
+                threshold_db,
+            ),
+            next_actions=["get_s_parameters", "analyze_s_parameters"],
+        )
+
+    def _analyze_s_parameters_data(
+        self,
+        setup_name: str,
+        sweep_name: str | None,
+        expression: str,
+        target_frequency_ghz: float | None,
+        threshold_db: float,
+    ) -> dict[str, Any]:
+        raw = self.backend.get_s_parameters(setup_name, sweep_name, expression)
+        try:
+            analysis = analyze_s_parameter_points(
+                raw.get("sample_points", []),
+                target_frequency_ghz=target_frequency_ghz,
+                threshold_db=threshold_db,
+            )
+        except ValueError as exc:
+            raise InputValidationError(str(exc)) from exc
+        return {**raw, "analysis": analysis}
+
+    def _analyze_input_impedance_data(
+        self,
+        setup_name: str,
+        sweep_name: str | None,
+        expression: str,
+        target_frequency_ghz: float | None,
+    ) -> dict[str, Any]:
+        raw = self.backend.get_s_parameters(setup_name, sweep_name, expression)
+        try:
+            analysis = analyze_input_impedance(
+                raw.get("sample_points", []),
+                target_frequency_ghz=target_frequency_ghz,
+            )
+        except ValueError as exc:
+            raise InputValidationError(str(exc)) from exc
+        return {**raw, "analysis": analysis}
+
+    def _export_result_report_data(
+        self,
+        setup_name: str,
+        relative_path: str,
+        sweep_name: str | None,
+        expression: str,
+        target_frequency_ghz: float | None,
+        threshold_db: float,
+    ) -> dict[str, Any]:
+        raw = self.backend.get_s_parameters(setup_name, sweep_name, expression)
+        try:
+            analysis = analyze_s_parameter_points(
+                raw.get("sample_points", []),
+                target_frequency_ghz=target_frequency_ghz,
+                threshold_db=threshold_db,
+            )
+            payload = build_result_report(raw, analysis)
+            report_path = self._safe_output_path(relative_path)
+            report = write_result_report(report_path, payload)
+        except ValueError as exc:
+            raise InputValidationError(str(exc)) from exc
+        return {"report": report, "path": str(report_path), "analysis": analysis}
 
     def export_touchstone(self, relative_path: str = "touchstone/result.s1p") -> dict[str, Any]:
         return self._call(

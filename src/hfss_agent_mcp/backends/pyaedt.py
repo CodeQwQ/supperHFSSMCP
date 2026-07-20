@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, replace
+from math import isfinite
 import multiprocessing as mp
 from multiprocessing.connection import Connection
 import os
@@ -17,6 +18,7 @@ from hfss_agent_mcp.core.errors import BackendUnavailableError, SessionError
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
+    DipoleAntennaSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
@@ -24,6 +26,7 @@ from hfss_agent_mcp.core.models import (
 )
 from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
 from hfss_agent_mcp.workflows.patch import build_patch_antenna
+from hfss_agent_mcp.workflows.dipole import build_dipole_antenna
 
 
 _PYAEDT_STUDENT_GRPC_PATCH_LOCK = threading.RLock()
@@ -224,6 +227,42 @@ class PyAedtBackend:
         recipe["created_objects"] = created_objects
         return recipe
 
+    def create_dipole_antenna(self, spec: DipoleAntennaSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_dipole_antenna", {"spec": asdict(spec)})
+
+        self._require_connection()
+        recipe = build_dipole_antenna(spec)
+        created_objects: list[str] = []
+        for primitive in recipe["geometry"]:
+            created_objects.append(self._create_geometry_primitive(primitive))
+        for boundary in recipe["boundaries"]:
+            self._assign_boundary(boundary)
+        for port in recipe["ports"]:
+            self._assign_port(port)
+        recipe["created_objects"] = created_objects
+        return recipe
+
+    def set_design_variable(self, name: str, value: str) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker(
+                "set_design_variable",
+                {"name": name, "value": value},
+            )
+        self._require_connection()
+        variable_manager = getattr(self._hfss, "variable_manager", None)
+        setter = getattr(variable_manager, "set_variable", None)
+        if callable(setter):
+            setter(name=name, expression=value, overwrite=True)
+        else:
+            try:
+                self._hfss[name] = value
+            except Exception as exc:
+                raise BackendUnavailableError(
+                    "PyAEDT object does not expose a design-variable setter."
+                ) from exc
+        return {"name": name, "value": value}
+
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
         if self._use_process_worker:
             return self._call_worker("create_setup", {"spec": asdict(spec)})
@@ -294,7 +333,13 @@ class PyAedtBackend:
         # sessions can reject that save through gRPC, while AnalyzeSetup is the
         # direct AEDT operation needed by this adapter.
         result = analyze_setup(name=setup_name, blocking=True)
-        return {"setup_name": setup_name, "status": "completed" if result else "failed"}
+        if not result:
+            return {
+                "setup_name": setup_name,
+                "status": "failed",
+                "error": f"HFSS solver reported failure for setup {setup_name!r}.",
+            }
+        return {"setup_name": setup_name, "status": "completed"}
 
     def get_s_parameters(
         self,
@@ -370,10 +415,12 @@ class PyAedtBackend:
         create_rectangle = getattr(modeler, "create_rectangle", None)
         if not callable(create_rectangle):
             raise BackendUnavailableError("PyAEDT modeler does not expose create_rectangle.")
+        orientation = primitive.get("metadata", {}).get("orientation", "XY")
+        sizes = [size[0], size[1]]
         create_rectangle(
-            orientation=primitive.get("metadata", {}).get("orientation", "XY"),
+            orientation=orientation,
             origin=origin,
-            sizes=[size[0], size[1]],
+            sizes=sizes,
             name=name,
             material=material,
         )
@@ -702,6 +749,10 @@ def _execute_worker_command(backend: Any, command: str, args: dict[str, Any]) ->
         return backend.get_design_summary(args.get("design_name"))
     if command == "create_patch_antenna":
         return backend.create_patch_antenna(PatchAntennaSpec(**args["spec"]))
+    if command == "create_dipole_antenna":
+        return backend.create_dipole_antenna(DipoleAntennaSpec(**args["spec"]))
+    if command == "set_design_variable":
+        return backend.set_design_variable(args["name"], args["value"])
     if command == "create_setup":
         return backend.create_setup(SetupSpec(**args["spec"]))
     if command == "create_frequency_sweep":
@@ -750,12 +801,14 @@ def _solution_data_to_points(solution: Any, expression: str) -> list[dict[str, f
     points: list[dict[str, float]] = []
     for index, frequency in enumerate(frequencies):
         point = {
-            "frequency_ghz": _frequency_to_ghz(frequency),
-            "value_db": float(db_values[index]),
+            "frequency_ghz": _finite_result_number(
+                _frequency_to_ghz(frequency), "frequency_ghz", index
+            ),
+            "value_db": _finite_result_number(db_values[index], "value_db", index),
         }
         if index < len(real_values) and index < len(imag_values):
-            real = float(real_values[index])
-            imag = float(imag_values[index])
+            real = _finite_result_number(real_values[index], "real", index)
+            imag = _finite_result_number(imag_values[index], "imag", index)
             point["real"] = real
             point["imag"] = imag
             if expression.strip().lower().startswith("z("):
@@ -763,6 +816,20 @@ def _solution_data_to_points(solution: Any, expression: str) -> list[dict[str, f
                 point["imag_ohms"] = imag
         points.append(point)
     return points
+
+
+def _finite_result_number(value: Any, field_name: str, index: int) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise BackendUnavailableError(
+            f"PyAEDT returned non-numeric {field_name} at sample index {index}."
+        ) from exc
+    if not isfinite(number):
+        raise BackendUnavailableError(
+            f"PyAEDT returned non-finite {field_name} at sample index {index}."
+        )
+    return number
 
 
 def _frequency_to_ghz(value: Any) -> float:

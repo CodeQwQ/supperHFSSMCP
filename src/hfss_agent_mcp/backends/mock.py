@@ -9,6 +9,7 @@ from hfss_agent_mcp.core.errors import BackendStateError
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
+    DipoleAntennaSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
@@ -16,6 +17,7 @@ from hfss_agent_mcp.core.models import (
 )
 from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
 from hfss_agent_mcp.workflows.patch import build_patch_antenna
+from hfss_agent_mcp.workflows.dipole import build_dipole_antenna
 
 
 class MockHfssBackend:
@@ -189,6 +191,38 @@ class MockHfssBackend:
         }
         return recipe
 
+    def create_dipole_antenna(self, spec: DipoleAntennaSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        recipe = build_dipole_antenna(spec)
+        for primitive in recipe["geometry"]:
+            state["objects"][primitive["name"]] = {
+                "role": primitive["role"],
+                "antenna": spec.name,
+                "material": primitive["material"],
+                "geometry": primitive,
+            }
+        for port in recipe["ports"]:
+            state["objects"][port["name"]] = {
+                "role": "port",
+                "antenna": spec.name,
+                "port_type": port["port_type"],
+                "assignment": port,
+            }
+        state[spec.name] = {
+            "role": "dipole_antenna",
+            "frequency_ghz": spec.frequency_ghz,
+            "materials": recipe["materials"],
+            "dimensions_mm": recipe["dimensions_mm"],
+            "object_names": recipe["object_names"],
+            "boundaries": recipe["boundaries"],
+            "ports": recipe["ports"],
+        }
+        return recipe
+
+    def set_design_variable(self, name: str, value: str) -> dict[str, Any]:
+        self._active_design_state()["variables"][name] = value
+        return {"name": name, "value": value}
+
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:
         state = self._active_design_state()
         state["setups"][spec.setup_name] = spec
@@ -313,6 +347,7 @@ class MockHfssBackend:
                 "objects": {},
                 "setups": {},
                 "sweeps": {},
+                "variables": {},
                 "solved_setups": set(),
             }
         self.design_name = design_name
@@ -347,6 +382,7 @@ def _serialize_design_state(state: dict[str, Any]) -> dict[str, Any]:
             }
             for setup_name, sweeps in state["sweeps"].items()
         },
+        "variables": dict(state.get("variables", {})),
         "solved_setups": sorted(state["solved_setups"]),
     }
 
@@ -366,5 +402,6 @@ def _restore_design_state(state: dict[str, Any]) -> dict[str, Any]:
             }
             for setup_name, sweeps in state.get("sweeps", {}).items()
         },
+        "variables": dict(state.get("variables", {})),
         "solved_setups": set(state.get("solved_setups", [])),
     }

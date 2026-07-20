@@ -75,6 +75,19 @@ class PatchAntennaSpec:
 
 
 @dataclass(frozen=True)
+class DipoleAntennaSpec:
+    name: str
+    frequency_ghz: float
+    conductor_material: str = "copper"
+    arm_length_mm: float | None = None
+    arm_width_mm: float = 2.0
+    arm_thickness_mm: float = 0.035
+    gap_mm: float = 1.0
+    airbox_margin_mm: float | None = None
+    port_type: str = "lumped"
+
+
+@dataclass(frozen=True)
 class SetupSpec:
     setup_name: str
     frequency_ghz: float

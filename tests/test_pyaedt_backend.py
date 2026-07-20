@@ -18,6 +18,7 @@ from hfss_agent_mcp.backends.pyaedt import (
     _student_grpc_detection_patch,
 )
 from hfss_agent_mcp.config import ServerConfig
+from hfss_agent_mcp.core.errors import BackendUnavailableError
 from hfss_agent_mcp.core.models import ConnectionSpec
 from hfss_agent_mcp.core.models import SweepSpec
 from hfss_agent_mcp.core.service import HfssService
@@ -119,6 +120,29 @@ class PyAedtBackendTests(unittest.TestCase):
 
         self.assertEqual({"setup_name": "Setup1", "status": "completed"}, result)
         self.assertEqual([("analyze_setup", "Setup1")], calls)
+
+    def test_run_simulation_reports_solver_failure(self) -> None:
+        class FakeHfss:
+            def analyze_setup(self, name: str, blocking: bool) -> bool:
+                return False
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = FakeHfss()
+
+        result = backend.run_simulation("Setup1")
+
+        self.assertEqual("failed", result["status"])
+
+    def test_solution_data_rejects_nonfinite_values_at_backend_boundary(self) -> None:
+        class FakeSolutionData:
+            primary_sweep_values = ["2.4GHz"]
+
+            def get_expression_data(self, expression: str, formula: str):
+                values = {"db20": [float("nan")], "real": [0.1], "imag": [0.2]}
+                return self.primary_sweep_values, values[formula]
+
+        with self.assertRaisesRegex(BackendUnavailableError, "non-finite"):
+            _solution_data_to_points(FakeSolutionData(), "S(1,1)")
 
     def test_frequency_sweep_uses_current_pyaedt_unit_keyword(self) -> None:
         calls: list[dict] = []

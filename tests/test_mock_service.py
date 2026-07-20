@@ -67,6 +67,40 @@ class MockServiceTests(unittest.TestCase):
         self.assertEqual("error", blocked["status"])
         self.assertEqual("InputValidationError", blocked["data"]["error_type"])
 
+    def test_dipole_workflow_runs_offline(self) -> None:
+        self.service.connect_hfss(design_name="DipoleDemo")
+        antenna = self.service.create_dipole_antenna(
+            name="Dipole2G4",
+            frequency_ghz=2.4,
+        )
+
+        self.assertEqual("ok", antenna["status"])
+        self.assertEqual("dipole", antenna["data"]["antenna_type"])
+        self.assertIn("Dipole2G4_arm_positive", antenna["data"]["object_names"].values())
+
+    def test_design_variable_optimization_runs_bounded_loop(self) -> None:
+        self.service.connect_hfss(design_name="OptimizationDemo")
+        self.service.create_simulation_setup(
+            setup_name="Setup1",
+            frequency_ghz=2.4,
+            sweep_start_ghz=2.0,
+            sweep_stop_ghz=2.8,
+            sweep_points=5,
+        )
+
+        result = self.service.optimize_design_variable(
+            variable_name="feed_offset",
+            candidate_values=["-1mm", "0mm", "1mm"],
+            setup_name="Setup1",
+            target_frequency_ghz=2.4,
+            max_evaluations=2,
+        )
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(2, result["data"]["evaluation_count"])
+        self.assertEqual("max_evaluations", result["data"]["stopped_reason"])
+        self.assertIn("feed_offset", self.service.backend.designs["OptimizationDemo"]["variables"])
+
 
 if __name__ == "__main__":
     unittest.main()

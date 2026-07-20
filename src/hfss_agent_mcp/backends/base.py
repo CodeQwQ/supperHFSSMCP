@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
+    DipoleAntennaSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
@@ -47,6 +48,12 @@ class HfssBackend(Protocol):
         ...
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
+        ...
+
+    def create_dipole_antenna(self, spec: DipoleAntennaSpec) -> dict[str, Any]:
+        ...
+
+    def set_design_variable(self, name: str, value: str) -> dict[str, Any]:
         ...
 
     def create_setup(self, spec: SetupSpec) -> dict[str, Any]:

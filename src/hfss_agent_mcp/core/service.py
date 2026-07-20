@@ -16,6 +16,7 @@ from hfss_agent_mcp.core.jobs import JobManager
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
     DesignSpec,
+    DipoleAntennaSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SessionLaunchSpec,
@@ -24,6 +25,7 @@ from hfss_agent_mcp.core.models import (
     ToolResponse,
 )
 from hfss_agent_mcp.core.project import ProjectPathPolicy
+from hfss_agent_mcp.core.optimization import evaluate_candidate, optimize_candidates
 from hfss_agent_mcp.core.results import analyze_input_impedance, analyze_s_parameter_points
 from hfss_agent_mcp.core.session import SessionManager
 from hfss_agent_mcp.core.scripts import ScriptRegistry
@@ -327,6 +329,103 @@ class HfssService:
             "Patch antenna workflow object created.",
             lambda: self.backend.create_patch_antenna(spec),
             next_actions=["create_simulation_setup", "validate_design"],
+        )
+
+    def create_dipole_antenna(
+        self,
+        name: str,
+        frequency_ghz: float,
+        conductor_material: str = "copper",
+        arm_length_mm: float | None = None,
+        arm_width_mm: float = 2.0,
+        arm_thickness_mm: float = 0.035,
+        gap_mm: float = 1.0,
+        airbox_margin_mm: float | None = None,
+        port_type: str = "lumped",
+    ) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        _require_non_empty("conductor_material", conductor_material)
+        _require_non_empty("port_type", port_type)
+        _require_positive("frequency_ghz", frequency_ghz)
+        _require_positive("arm_width_mm", arm_width_mm)
+        _require_positive("arm_thickness_mm", arm_thickness_mm)
+        _require_positive("gap_mm", gap_mm)
+        for field_name, value in {
+            "arm_length_mm": arm_length_mm,
+            "airbox_margin_mm": airbox_margin_mm,
+        }.items():
+            if value is not None:
+                _require_positive(field_name, value)
+        spec = DipoleAntennaSpec(
+            name=name,
+            frequency_ghz=frequency_ghz,
+            conductor_material=conductor_material,
+            arm_length_mm=arm_length_mm,
+            arm_width_mm=arm_width_mm,
+            arm_thickness_mm=arm_thickness_mm,
+            gap_mm=gap_mm,
+            airbox_margin_mm=airbox_margin_mm,
+            port_type=port_type,
+        )
+        return self._call(
+            "Dipole antenna workflow object created.",
+            lambda: self.backend.create_dipole_antenna(spec),
+            next_actions=["create_simulation_setup", "validate_design"],
+        )
+
+    def set_design_variable(self, name: str, value: str) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        _require_non_empty("value", value)
+        return self._call(
+            "HFSS design variable updated.",
+            lambda: self.backend.set_design_variable(name, value),
+            next_actions=["run_simulation", "optimize_design_variable"],
+        )
+
+    def optimize_design_variable(
+        self,
+        variable_name: str,
+        candidate_values: list[str],
+        setup_name: str,
+        target_frequency_ghz: float,
+        sweep_name: str | None = None,
+        expression: str = "dB(S(1,1))",
+        threshold_db: float = -10.0,
+        max_evaluations: int | None = None,
+    ) -> dict[str, Any]:
+        _require_non_empty("variable_name", variable_name)
+        _require_non_empty("setup_name", setup_name)
+        _require_non_empty("expression", expression)
+        _require_positive("target_frequency_ghz", target_frequency_ghz)
+        if not candidate_values:
+            raise InputValidationError("candidate_values must contain at least one value.")
+
+        def evaluate(value: str) -> dict[str, Any]:
+            variable = self.backend.set_design_variable(variable_name, str(value))
+            simulation = self.backend.run_simulation(setup_name)
+            if simulation.get("status") != "completed":
+                raise BackendUnavailableError(
+                    simulation.get("error", f"HFSS simulation failed for {setup_name!r}.")
+                )
+            raw = self.backend.get_s_parameters(setup_name, sweep_name, expression)
+            result = evaluate_candidate(
+                value,
+                raw,
+                target_frequency_ghz=target_frequency_ghz,
+                threshold_db=threshold_db,
+            )
+            result["variable"] = variable
+            result["simulation"] = simulation
+            return result
+
+        return self._call(
+            "HFSS design-variable optimization completed.",
+            lambda: optimize_candidates(
+                candidate_values,
+                evaluate,
+                max_evaluations=max_evaluations,
+            ),
+            next_actions=["set_design_variable", "get_s_parameters", "analyze_s_parameters"],
         )
 
     def create_simulation_setup(

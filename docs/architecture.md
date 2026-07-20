@@ -75,6 +75,9 @@ flowchart TD
 - `set_active_design`：切换当前 active design。
 - `get_design_summary`：读取指定或当前 design 的对象和 setup 摘要。
 - `create_patch_antenna`：创建贴片天线 workflow 对象，返回尺寸、几何、材料、边界和端口 recipe。
+- `create_dipole_antenna`：创建平面中心馈电偶极子 workflow 对象，返回两臂、端口和 radiation airbox recipe。
+- `set_design_variable`：设置一个显式 HFSS design variable。
+- `optimize_design_variable`：按有限候选集逐次设置变量、求解并读取 S 参数，返回最佳候选和完整评估记录。
 - `create_simulation_setup`：创建 setup、自适应参数和默认扫频。
 - `create_frequency_sweep`：为已有 setup 创建或覆盖频率扫频。
 - `validate_design`：执行设计验证。

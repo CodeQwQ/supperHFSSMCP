@@ -368,7 +368,7 @@ flowchart TD
 - [x] 模块 5：仿真设置与任务管理。
 - [x] 模块 6：结果读取与判据分析（真实 HFSS 验收通过，重测 10 返回 101 个 S 参数频点并成功导出报告）。
 - [x] 模块 7：COM Adapter 与 AEDT CLI Runner（native/PyAEDT Student bridge 真实验收通过；COM 为 Student 环境限制）。
-- [ ] 模块 8：多用户、安全与服务器部署。
+- [x] 模块 8：多用户、安全与服务器部署（真实 MCP HTTP/HFSS 验收通过）。
 - [ ] 模块 9：更多天线与优化闭环。
 
 ## 每个模块的完成标准

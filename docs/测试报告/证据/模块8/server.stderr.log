@@ -1,0 +1,63 @@
+INFO:     Started server process [47220]
+INFO:     Waiting for application startup.
+[07/20/26 14:02:39] INFO     StreamableHTTP      streamable_http_manager.py:131
+                             session manager                                   
+                             started                                           
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8043 (Press CTRL+C to quit)
+[07/20/26 14:04:43] INFO     Created new         streamable_http_manager.py:281
+                             transport with                                    
+                             session ID:                                       
+                             35ac319a47dd4405a28                               
+                             32d1facfa219b                                     
+                    INFO     Processing request of type           server.py:733
+                             ListToolsRequest                                  
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+[07/20/26 14:04:44] INFO     Terminating session:        streamable_http.py:788
+                             35ac319a47dd4405a2832d1facf                       
+                             a219b                                             
+[07/20/26 14:05:02] INFO     Created new         streamable_http_manager.py:281
+                             transport with                                    
+                             session ID:                                       
+                             1ef1e6e885c842bbba5                               
+                             5620918ac2691                                     
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+[07/20/26 14:05:04] INFO     Processing request of type           server.py:733
+                             ListToolsRequest                                  
+                    INFO     Terminating session:        streamable_http.py:788
+                             1ef1e6e885c842bbba55620918a                       
+                             c2691                                             
+[07/20/26 14:09:15] INFO     Created new         streamable_http_manager.py:281
+                             transport with                                    
+                             session ID:                                       
+                             1f220d85607f4c28a08                               
+                             c9b91090c4086                                     
+                    INFO     Processing request of type           server.py:733
+                             ListToolsRequest                                  
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+                    INFO     Created new         streamable_http_manager.py:281
+                             transport with                                    
+                             session ID:                                       
+                             7f22a7c0b93d45c7847                               
+                             58c12dede920d                                     
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+                    INFO     Processing request of type           server.py:733
+                             ListToolsRequest                                  
+                    INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+[07/20/26 14:09:19] INFO     Processing request of type           server.py:733
+                             CallToolRequest                                   
+[07/20/26 14:09:24] INFO     Terminating session:        streamable_http.py:788
+                             7f22a7c0b93d45c784758c12ded                       
+                             e920d                                             
+                    INFO     Terminating session:        streamable_http.py:788
+                             1f220d85607f4c28a08c9b91090                       
+                             c4086                                             

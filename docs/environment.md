@@ -89,6 +89,8 @@ HFSS 自动化强依赖本机软件、license、Python 包和路径配置。如�
 
 ## 验证方法
 
+共享 HTTP 部署还应配置以下策略变量：`HFSS_AGENT_REQUIRE_CLIENT_ID` 控制是否拒绝匿名请求，`HFSS_AGENT_AUDIT_LOG` 指定脱敏审计文件，`HFSS_AGENT_LOCK_TIMEOUT_SECONDS` 指定共享 HFSS 锁的等待上限。详细部署流程见 `docs/deployment.md`。
+
 运行环境诊断测试：
 
 ```powershell

@@ -114,3 +114,18 @@ $env:PYTHONPATH="E:\LLMproject\HFSSagent\src"
 - Cai-aa AEDT MCP：<https://github.com/Cai-aa/CAE-Agent-Hub/tree/main/MCP/Ansys/AEDT%20MCP>
 - gfgf2023 HFSS MCP：<https://github.com/gfgf2023/hfss-mcp-server>
 - PyAEDT 文档：<https://aedt.docs.pyansys.com/version/stable/>
+
+## 共享部署边界
+
+共享 HTTP 部署在 FastMCP 工具分发前增加请求安全层。该层从请求 metadata 读取 `_meta.client_id`，为请求建立 owner 和 request id，按 owner 选择输出工作区，并将工具调用写入脱敏 JSONL 审计日志；同一服务进程内的 HFSS 操作通过共享锁串行化。业务工具接口保持不变，安全策略集中在 `src/hfss_agent_mcp/core/security.py`。
+
+```mermaid
+flowchart LR
+    A["Agent / MCP Client"] --> B["FastMCP HTTP"]
+    B --> C["Security Hook"]
+    C --> D["HfssService"]
+    D --> E["Owner Workspace"]
+    D --> F["HFSS Backend"]
+    C --> G["Redacted Audit JSONL"]
+    C --> H["Shared HFSS Lock"]
+```

@@ -53,6 +53,7 @@ class ComAdapter:
         arguments: dict[str, Any],
         registry: ScriptRegistry | None = None,
         output_path: Path | None = None,
+        log_root: Path | None = None,
     ) -> dict[str, Any]:
         if registry is not None:
             registry.require(definition.script_id)
@@ -87,11 +88,11 @@ class ComAdapter:
             "stdout": "",
             "stderr": "" if raw_result is not False else "AEDT COM RunScript returned False",
             "artifact": _read_json(output_path),
-            "log_path": str(self._write_log(definition, raw_result)),
+            "log_path": str(self._write_log(definition, raw_result, log_root=log_root)),
         }
 
-    def _write_log(self, definition: ScriptDefinition, raw_result: Any) -> Path:
-        log_dir = self.output_root / "scripts" / "logs"
+    def _write_log(self, definition: ScriptDefinition, raw_result: Any, log_root: Path | None = None) -> Path:
+        log_dir = (log_root or self.output_root) / "scripts" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         path = log_dir / f"{stamp}-com.log"

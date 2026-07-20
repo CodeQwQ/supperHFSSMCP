@@ -19,6 +19,9 @@ class ServerConfig:
     connect_timeout_seconds: float = 60.0
     cli_timeout_seconds: float = 300.0
     com_progid: str | None = None
+    require_client_id: bool = False
+    audit_log_path: Path | None = None
+    lock_timeout_seconds: float = 30.0
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -40,4 +43,20 @@ class ServerConfig:
                 os.getenv("HFSS_AGENT_CLI_TIMEOUT_SECONDS", str(cls.cli_timeout_seconds))
             ),
             com_progid=os.getenv("HFSS_AGENT_COM_PROGID") or None,
+            require_client_id=_env_bool("HFSS_AGENT_REQUIRE_CLIENT_ID", cls.require_client_id),
+            audit_log_path=(
+                Path(os.getenv("HFSS_AGENT_AUDIT_LOG"))
+                if os.getenv("HFSS_AGENT_AUDIT_LOG")
+                else None
+            ),
+            lock_timeout_seconds=float(
+                os.getenv("HFSS_AGENT_LOCK_TIMEOUT_SECONDS", str(cls.lock_timeout_seconds))
+            ),
         )
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}

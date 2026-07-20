@@ -27,6 +27,7 @@ from hfss_agent_mcp.core.project import ProjectPathPolicy
 from hfss_agent_mcp.core.results import analyze_input_impedance, analyze_s_parameter_points
 from hfss_agent_mcp.core.session import SessionManager
 from hfss_agent_mcp.core.scripts import ScriptRegistry
+from hfss_agent_mcp.core.security import SecurityManager, current_identity
 from hfss_agent_mcp.results.analysis import build_result_report, write_result_report
 
 
@@ -43,6 +44,12 @@ class HfssService:
         self.sessions = SessionManager(backend.name)
         self.project_paths = ProjectPathPolicy(self.output_root / "projects")
         self.jobs = JobManager()
+        self.security = SecurityManager(
+            self.output_root,
+            audit_log_path=self.config.audit_log_path,
+            require_client_id=self.config.require_client_id,
+            lock_timeout_seconds=self.config.lock_timeout_seconds,
+        )
         self.script_registry = ScriptRegistry(self.config.script_root)
         self.script_registry.register(
             "aedt_probe",
@@ -144,9 +151,9 @@ class HfssService:
         return self._call(
             "AEDT session records retrieved.",
             lambda: {
-                "count": len(self.sessions.list()),
-                "active_session_id": self.sessions.active_session_id,
-                "sessions": [record.to_dict() for record in self.sessions.list()],
+                "count": len(self._owned_sessions()),
+                "active_session_id": self._owned_active_session_id(),
+                "sessions": [record.to_dict() for record in self._owned_sessions()],
             },
             next_actions=["launch_aedt", "connect_hfss"],
         )
@@ -180,7 +187,7 @@ class HfssService:
         _require_non_empty("session_id", session_id)
         return self._call(
             "AEDT session record retrieved.",
-            lambda: {"session": self.sessions.require(session_id).to_dict()},
+            lambda: {"session": self._require_owned_session(session_id).to_dict()},
             next_actions=["connect_hfss", "release_connection"],
         )
 
@@ -188,7 +195,7 @@ class HfssService:
         _require_non_empty("session_id", session_id)
         return self._call(
             "AEDT session record released.",
-            lambda: {"session": self.sessions.release(session_id).to_dict()},
+            lambda: {"session": self.sessions.release(self._require_owned_session(session_id).session_id).to_dict()},
             next_actions=["list_aedt_sessions", "connect_hfss"],
         )
 
@@ -213,7 +220,7 @@ class HfssService:
     def open_project(self, relative_path: str) -> dict[str, Any]:
         return self._call(
             "HFSS project opened.",
-            lambda: self.backend.open_project(self.project_paths.resolve_relative(relative_path)),
+            lambda: self.backend.open_project(self._project_policy().resolve_relative(relative_path)),
             next_actions=["get_project_info", "create_hfss_design", "set_active_design"],
         )
 
@@ -221,7 +228,7 @@ class HfssService:
         return self._call(
             "HFSS project saved.",
             lambda: self.backend.save_project(
-                self.project_paths.resolve_relative(relative_path)
+                self._project_policy().resolve_relative(relative_path)
                 if relative_path is not None
                 else None
             ),
@@ -423,7 +430,7 @@ class HfssService:
         _require_non_empty("job_id", job_id)
         return self._call(
             "Simulation job retrieved.",
-            lambda: {"job": self.jobs.require(job_id).to_dict()},
+            lambda: {"job": self.jobs.require(job_id, owner=self._owner()).to_dict()},
             next_actions=["get_s_parameters", "run_simulation"],
         )
 
@@ -604,8 +611,9 @@ class HfssService:
 
     def _safe_output_path(self, relative_path: str) -> Path:
         _require_non_empty("relative_path", relative_path)
-        candidate = (self.output_root / relative_path).resolve()
-        if self.output_root != candidate and self.output_root not in candidate.parents:
+        root = self._workspace_root()
+        candidate = (root / relative_path).resolve()
+        if root != candidate and root not in candidate.parents:
             raise InputValidationError("relative_path must stay inside HFSS_AGENT_OUTPUT_ROOT.")
         return candidate
 
@@ -645,7 +653,7 @@ class HfssService:
                 )
             return CliRunner(
                 pyaedt_executable,
-                self.output_root,
+                self._workspace_root(),
                 self.config.cli_timeout_seconds,
             ).run_pyaedt(
                 definition,
@@ -661,10 +669,11 @@ class HfssService:
                 raise InputValidationError(
                     "AEDT executable is not configured. Set HFSS_AGENT_AEDT_EXECUTABLE."
                 )
-            cli = CliRunner(executable, self.output_root, self.config.cli_timeout_seconds)
+            workspace_root = self._workspace_root()
+            cli = CliRunner(executable, workspace_root, self.config.cli_timeout_seconds)
             if operation == "batch_solve":
                 project = Path(project_path or "").expanduser().resolve()
-                if self.output_root not in project.parents and project != self.output_root:
+                if workspace_root not in project.parents and project != workspace_root:
                     raise InputValidationError(
                         "project_path must stay inside HFSS_AGENT_OUTPUT_ROOT."
                     )
@@ -682,6 +691,7 @@ class HfssService:
             arguments,
             registry=self.script_registry,
             output_path=output_path,
+            log_root=self._workspace_root(),
         )
 
     @staticmethod
@@ -697,6 +707,39 @@ class HfssService:
 
     def _environment_data(self) -> dict[str, Any]:
         return collect_environment(self.config, self.backend.health())
+
+    def _workspace_root(self) -> Path:
+        return self.security.workspace_root()
+
+    def _project_policy(self) -> ProjectPathPolicy:
+        return ProjectPathPolicy(self._workspace_root() / "projects")
+
+    def _owner(self) -> str | None:
+        identity = current_identity()
+        return identity.owner if identity is not None else None
+
+    def _owned_sessions(self) -> list[Any]:
+        owner = self._owner()
+        if owner is None:
+            return self.sessions.list()
+        return [record for record in self.sessions.list() if record.owner in {None, owner}]
+
+    def _owned_active_session_id(self) -> str | None:
+        session_id = self.sessions.active_session_id
+        if session_id is None:
+            return None
+        try:
+            self._require_owned_session(session_id)
+        except HfssAgentError:
+            return None
+        return session_id
+
+    def _require_owned_session(self, session_id: str) -> Any:
+        record = self.sessions.require(session_id)
+        owner = self._owner()
+        if owner is not None and record.owner not in {None, owner}:
+            raise SessionError(f"Session {session_id!r} belongs to another owner.")
+        return record
 
     def _is_student_aedt_configured(self) -> bool:
         executable = self.config.aedt_executable
@@ -714,6 +757,14 @@ class HfssService:
         return None
 
     def _connect_session(self, spec: ConnectionSpec) -> dict[str, Any]:
+        identity = current_identity()
+        identity_owner = identity.owner if identity is not None else None
+        if identity_owner is not None and spec.owner != identity_owner:
+            from dataclasses import replace
+
+            spec = replace(spec, owner=identity_owner)
+        if spec.session_id:
+            self._require_owned_session(spec.session_id)
         record = self.sessions.begin_connect(spec)
         try:
             project = self.backend.connect(spec)
@@ -728,7 +779,7 @@ class HfssService:
         return {"session": record.to_dict(), "project": project}
 
     def _active_session_data(self) -> dict[str, Any] | None:
-        session_id = self.sessions.active_session_id
+        session_id = self._owned_active_session_id()
         if not session_id:
             return None
         try:
@@ -738,10 +789,11 @@ class HfssService:
 
     def _create_project(self, project_name: str, relative_path: str | None) -> dict[str, Any]:
         _require_non_empty("project_name", project_name)
+        policy = self._project_policy()
         project_path = (
-            self.project_paths.resolve_relative(relative_path)
+            policy.resolve_relative(relative_path)
             if relative_path is not None
-            else self.project_paths.default_project_path(project_name)
+            else policy.default_project_path(project_name)
         )
         return self.backend.create_project(
             ProjectSpec(
@@ -751,8 +803,9 @@ class HfssService:
         )
 
     def _run_simulation_job(self, setup_name: str, wait_for_completion: bool) -> dict[str, Any]:
-        job = self.jobs.create(setup_name)
-        self.jobs.start(job.job_id, "Simulation job accepted by MCP service.")
+        owner = self._owner()
+        job = self.jobs.create(setup_name, owner=owner)
+        self.jobs.start(job.job_id, "Simulation job accepted by MCP service.", owner=owner)
         if not wait_for_completion:
             return {
                 "job": job.to_dict(),
@@ -763,12 +816,13 @@ class HfssService:
         try:
             result = self.backend.run_simulation(setup_name)
         except HfssAgentError as exc:
-            self.jobs.fail(job.job_id, str(exc))
+            self.jobs.fail(job.job_id, str(exc), owner=owner)
             raise
         if result.get("status") == "failed":
             failed = self.jobs.fail(
                 job.job_id,
                 str(result.get("failure_reason") or "Backend reported simulation failure."),
+                owner=owner,
             )
             data = dict(result)
             data["job"] = failed.to_dict()
@@ -778,6 +832,7 @@ class HfssService:
             job.job_id,
             result,
             result.get("backend_note", "Backend solve finished."),
+            owner=owner,
         )
         data = dict(result)
         data["job"] = completed.to_dict()

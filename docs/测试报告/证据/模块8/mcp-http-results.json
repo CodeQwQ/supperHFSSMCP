@@ -1,0 +1,462 @@
+{
+  "endpoint": "http://127.0.0.1:8043/mcp",
+  "grpc_port": 53387,
+  "output_root": "E:\\LLMproject\\HFSSagent\\outputs\\module8-verification-20260720",
+  "client_api": "ClientSession.call_tool(name, arguments, meta={'client_id': ...})",
+  "clients": [
+    "module8-alice",
+    "module8-bob"
+  ],
+  "initialize": {
+    "protocolVersion": "2025-11-25",
+    "capabilities": {
+      "experimental": {},
+      "prompts": {
+        "listChanged": false
+      },
+      "resources": {
+        "subscribe": false,
+        "listChanged": false
+      },
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "serverInfo": {
+      "name": "HFSS Agent MCP",
+      "version": "1.28.1"
+    },
+    "instructions": "Use these tools to control HFSS through a bounded engineering workflow. Call health_check first, then connect_hfss, inspect project state, create or modify designs, validate, solve, and read results. Automation tools run only server-registered scripts; never submit arbitrary code."
+  },
+  "tools_list": {
+    "count": 28,
+    "names": [
+      "health_check",
+      "env_check",
+      "list_aedt_sessions",
+      "launch_aedt",
+      "get_session_info",
+      "release_connection",
+      "connect_hfss",
+      "get_project_info",
+      "create_project",
+      "open_project",
+      "save_project",
+      "close_project",
+      "create_hfss_design",
+      "set_active_design",
+      "get_design_summary",
+      "create_patch_antenna",
+      "create_simulation_setup",
+      "create_frequency_sweep",
+      "validate_design",
+      "run_simulation",
+      "get_simulation_job",
+      "get_s_parameters",
+      "export_touchstone",
+      "analyze_s_parameters",
+      "analyze_input_impedance",
+      "export_result_report",
+      "list_automation_scripts",
+      "run_automation_script"
+    ]
+  },
+  "alice_connect": {
+    "client_id": "module8-alice",
+    "tool": "connect_hfss",
+    "request_meta": {
+      "client_id": "module8-alice"
+    },
+    "started_epoch": 1784527755.518346,
+    "duration_seconds": 0.061,
+    "result": {
+      "is_error": false,
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"Connected to HFSS session.\",\n  \"data\": {\n    \"session\": {\n      \"session_id\": \"pyaedt-0002\",\n      \"backend\": \"pyaedt\",\n      \"status\": \"connected\",\n      \"owner\": \"module8-alice\",\n      \"machine\": \"localhost\",\n      \"port\": 53387,\n      \"project_path\": null,\n      \"design_name\": null,\n      \"desktop_version\": \"2025.2\",\n      \"created_at\": \"2026-07-20T06:09:15.525352+00:00\",\n      \"updated_at\": \"2026-07-20T06:09:15.577819+00:00\",\n      \"metadata\": {\n        \"connect_timeout_seconds\": 90.0\n      }\n    },\n    \"project\": {\n      \"backend\": \"pyaedt\",\n      \"connected\": true,\n      \"project_loaded\": true,\n      \"project_name\": \"Project14\",\n      \"project_path\": \"D:\\\\ansysProjects\\\\Project14.aedt\",\n      \"design_name\": \"HFSS_Module6_Verifier10\",\n      \"active_design\": \"HFSS_Module6_Verifier10\",\n      \"designs\": [\n        \"HFSS_8TW\",\n        \"HFSS_Module6_Verifier10\",\n        \"HFSS_Module6_Verifier7\",\n        \"HFSS_Module6_Verifier8\",\n        \"HFSS_Module6_Verifier9\"\n      ],\n      \"solution_type\": \"Modal\",\n      \"object_count\": 6,\n      \"objects\": [\n        \"Module6PatchVerifier10_airbox\",\n        \"Module6PatchVerifier10_feed\",\n        \"Module6PatchVerifier10_ground\",\n        \"Module6PatchVerifier10_lumped_port\",\n        \"Module6PatchVerifier10_patch\",\n        \"Module6PatchVerifier10_substrate\"\n      ]\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"get_session_info\",\n    \"get_project_info\",\n    \"create_hfss_design\",\n    \"create_patch_antenna\"\n  ]\n}"
+          }
+        ],
+        "isError": false
+      },
+      "parsed": {
+        "status": "ok",
+        "message": "Connected to HFSS session.",
+        "data": {
+          "session": {
+            "session_id": "pyaedt-0002",
+            "backend": "pyaedt",
+            "status": "connected",
+            "owner": "module8-alice",
+            "machine": "localhost",
+            "port": 53387,
+            "project_path": null,
+            "design_name": null,
+            "desktop_version": "2025.2",
+            "created_at": "2026-07-20T06:09:15.525352+00:00",
+            "updated_at": "2026-07-20T06:09:15.577819+00:00",
+            "metadata": {
+              "connect_timeout_seconds": 90.0
+            }
+          },
+          "project": {
+            "backend": "pyaedt",
+            "connected": true,
+            "project_loaded": true,
+            "project_name": "Project14",
+            "project_path": "D:\\ansysProjects\\Project14.aedt",
+            "design_name": "HFSS_Module6_Verifier10",
+            "active_design": "HFSS_Module6_Verifier10",
+            "designs": [
+              "HFSS_8TW",
+              "HFSS_Module6_Verifier10",
+              "HFSS_Module6_Verifier7",
+              "HFSS_Module6_Verifier8",
+              "HFSS_Module6_Verifier9"
+            ],
+            "solution_type": "Modal",
+            "object_count": 6,
+            "objects": [
+              "Module6PatchVerifier10_airbox",
+              "Module6PatchVerifier10_feed",
+              "Module6PatchVerifier10_ground",
+              "Module6PatchVerifier10_lumped_port",
+              "Module6PatchVerifier10_patch",
+              "Module6PatchVerifier10_substrate"
+            ]
+          }
+        },
+        "warnings": [],
+        "next_actions": [
+          "get_session_info",
+          "get_project_info",
+          "create_hfss_design",
+          "create_patch_antenna"
+        ]
+      }
+    }
+  },
+  "alice_project_info": {
+    "client_id": "module8-alice",
+    "tool": "get_project_info",
+    "request_meta": {
+      "client_id": "module8-alice"
+    },
+    "started_epoch": 1784527755.5798192,
+    "duration_seconds": 0.02,
+    "result": {
+      "is_error": false,
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"Project state retrieved.\",\n  \"data\": {\n    \"backend\": \"pyaedt\",\n    \"connected\": true,\n    \"project_loaded\": true,\n    \"project_name\": \"Project14\",\n    \"project_path\": \"D:\\\\ansysProjects\\\\Project14.aedt\",\n    \"design_name\": \"HFSS_Module6_Verifier10\",\n    \"active_design\": \"HFSS_Module6_Verifier10\",\n    \"designs\": [\n      \"HFSS_8TW\",\n      \"HFSS_Module6_Verifier10\",\n      \"HFSS_Module6_Verifier7\",\n      \"HFSS_Module6_Verifier8\",\n      \"HFSS_Module6_Verifier9\"\n    ],\n    \"solution_type\": \"Modal\",\n    \"object_count\": 6,\n    \"objects\": [\n      \"Module6PatchVerifier10_airbox\",\n      \"Module6PatchVerifier10_feed\",\n      \"Module6PatchVerifier10_ground\",\n      \"Module6PatchVerifier10_lumped_port\",\n      \"Module6PatchVerifier10_patch\",\n      \"Module6PatchVerifier10_substrate\"\n    ]\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"create_project\",\n    \"open_project\",\n    \"create_hfss_design\",\n    \"validate_design\"\n  ]\n}"
+          }
+        ],
+        "isError": false
+      },
+      "parsed": {
+        "status": "ok",
+        "message": "Project state retrieved.",
+        "data": {
+          "backend": "pyaedt",
+          "connected": true,
+          "project_loaded": true,
+          "project_name": "Project14",
+          "project_path": "D:\\ansysProjects\\Project14.aedt",
+          "design_name": "HFSS_Module6_Verifier10",
+          "active_design": "HFSS_Module6_Verifier10",
+          "designs": [
+            "HFSS_8TW",
+            "HFSS_Module6_Verifier10",
+            "HFSS_Module6_Verifier7",
+            "HFSS_Module6_Verifier8",
+            "HFSS_Module6_Verifier9"
+          ],
+          "solution_type": "Modal",
+          "object_count": 6,
+          "objects": [
+            "Module6PatchVerifier10_airbox",
+            "Module6PatchVerifier10_feed",
+            "Module6PatchVerifier10_ground",
+            "Module6PatchVerifier10_lumped_port",
+            "Module6PatchVerifier10_patch",
+            "Module6PatchVerifier10_substrate"
+          ]
+        },
+        "warnings": [],
+        "next_actions": [
+          "create_project",
+          "open_project",
+          "create_hfss_design",
+          "validate_design"
+        ]
+      }
+    }
+  },
+  "alice_sessions": {
+    "client_id": "module8-alice",
+    "tool": "list_aedt_sessions",
+    "request_meta": {
+      "client_id": "module8-alice"
+    },
+    "started_epoch": 1784527755.5993378,
+    "duration_seconds": 0.008,
+    "result": {
+      "is_error": false,
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"AEDT session records retrieved.\",\n  \"data\": {\n    \"count\": 1,\n    \"active_session_id\": \"pyaedt-0002\",\n    \"sessions\": [\n      {\n        \"session_id\": \"pyaedt-0002\",\n        \"backend\": \"pyaedt\",\n        \"status\": \"connected\",\n        \"owner\": \"module8-alice\",\n        \"machine\": \"localhost\",\n        \"port\": 53387,\n        \"project_path\": null,\n        \"design_name\": null,\n        \"desktop_version\": \"2025.2\",\n        \"created_at\": \"2026-07-20T06:09:15.525352+00:00\",\n        \"updated_at\": \"2026-07-20T06:09:15.577819+00:00\",\n        \"metadata\": {\n          \"connect_timeout_seconds\": 90.0\n        }\n      }\n    ]\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"launch_aedt\",\n    \"connect_hfss\"\n  ]\n}"
+          }
+        ],
+        "isError": false
+      },
+      "parsed": {
+        "status": "ok",
+        "message": "AEDT session records retrieved.",
+        "data": {
+          "count": 1,
+          "active_session_id": "pyaedt-0002",
+          "sessions": [
+            {
+              "session_id": "pyaedt-0002",
+              "backend": "pyaedt",
+              "status": "connected",
+              "owner": "module8-alice",
+              "machine": "localhost",
+              "port": 53387,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-20T06:09:15.525352+00:00",
+              "updated_at": "2026-07-20T06:09:15.577819+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 90.0
+              }
+            }
+          ]
+        },
+        "warnings": [],
+        "next_actions": [
+          "launch_aedt",
+          "connect_hfss"
+        ]
+      }
+    }
+  },
+  "bob_initialize": {
+    "protocolVersion": "2025-11-25",
+    "capabilities": {
+      "experimental": {},
+      "prompts": {
+        "listChanged": false
+      },
+      "resources": {
+        "subscribe": false,
+        "listChanged": false
+      },
+      "tools": {
+        "listChanged": false
+      }
+    },
+    "serverInfo": {
+      "name": "HFSS Agent MCP",
+      "version": "1.28.1"
+    },
+    "instructions": "Use these tools to control HFSS through a bounded engineering workflow. Call health_check first, then connect_hfss, inspect project state, create or modify designs, validate, solve, and read results. Automation tools run only server-registered scripts; never submit arbitrary code."
+  },
+  "bob_sessions": {
+    "client_id": "module8-bob",
+    "tool": "list_aedt_sessions",
+    "request_meta": {
+      "client_id": "module8-bob"
+    },
+    "started_epoch": 1784527755.740732,
+    "duration_seconds": 0.023,
+    "result": {
+      "is_error": false,
+      "raw": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"status\": \"ok\",\n  \"message\": \"AEDT session records retrieved.\",\n  \"data\": {\n    \"count\": 0,\n    \"active_session_id\": null,\n    \"sessions\": []\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"launch_aedt\",\n    \"connect_hfss\"\n  ]\n}"
+          }
+        ],
+        "isError": false
+      },
+      "parsed": {
+        "status": "ok",
+        "message": "AEDT session records retrieved.",
+        "data": {
+          "count": 0,
+          "active_session_id": null,
+          "sessions": []
+        },
+        "warnings": [],
+        "next_actions": [
+          "launch_aedt",
+          "connect_hfss"
+        ]
+      }
+    }
+  },
+  "concurrent_probe": {
+    "started_epoch": 1784527755.7642589,
+    "wall_duration_seconds": 8.624,
+    "requests": [
+      {
+        "client_id": "module8-alice",
+        "tool": "run_automation_script",
+        "request_meta": {
+          "client_id": "module8-alice"
+        },
+        "started_epoch": 1784527755.7642589,
+        "duration_seconds": 8.623,
+        "result": {
+          "is_error": false,
+          "raw": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"status\": \"ok\",\n  \"message\": \"HFSS automation operation finished.\",\n  \"data\": {\n    \"success\": true,\n    \"command\": [\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\.venv\\\\Scripts\\\\python.exe\",\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\pyaedt_student_bridge.py\",\n      \"--port\",\n      \"53387\"\n    ],\n    \"return_code\": 0,\n    \"stdout\": \"PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].\\nPyAEDT INFO: PyAEDT version 1.2.0.\\nPyAEDT INFO: Initializing Desktop session.\\nPyAEDT INFO: AEDT version 2025.2SV Student.\\nPyAEDT INFO: AEDT installation Path D:\\\\Ansys\\\\ANSYS Inc\\\\ANSYS Student\\\\v252\\\\AnsysEM\\nPyAEDT INFO: Connected to AEDT gRPC session on port 53387.\\nPyAEDT WARNING: Service Pack is not detected. PyAEDT is currently connecting in Insecure Mode.\\nPyAEDT WARNING: Please download and install latest Service Pack to use connect to AEDT in Secure Mode.\\nPyAEDT INFO: Non-graphical mode detected. Disabling Desktop logs.\\nPyAEDT Student bridge executed: E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\aedt_probe.py\\nPyAEDT INFO: Desktop has been released.\\n\",\n    \"stderr\": \"\",\n    \"duration_seconds\": 4.64,\n    \"log_path\": \"E:\\\\LLMproject\\\\HFSSagent\\\\outputs\\\\module8-verification-20260720\\\\workspaces\\\\module8-alice\\\\scripts\\\\logs\\\\20260720T060919743411Z-python.log\",\n    \"artifact\": {\n      \"project_name\": \"Project14\",\n      \"design_name\": \"HFSS_Module6_Verifier10\",\n      \"script_id\": \"aedt_probe\",\n      \"arguments\": {\n        \"nested\": {\n          \"authorization\": \"Bearer MODULE8_ALICE_AUTH_MUST_NOT_APPEAR\",\n          \"password\": \"MODULE8_ALICE_PASSWORD_MUST_NOT_APPEAR\"\n        },\n        \"client_marker\": \"module8-alice\",\n        \"token\": \"MODULE8_ALICE_TOKEN_MUST_NOT_APPEAR\"\n      },\n      \"success\": true\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"list_automation_scripts\",\n    \"get_project_info\"\n  ]\n}"
+              }
+            ],
+            "isError": false
+          },
+          "parsed": {
+            "status": "ok",
+            "message": "HFSS automation operation finished.",
+            "data": {
+              "success": true,
+              "command": [
+                "E:\\LLMproject\\HFSSagent\\.venv\\Scripts\\python.exe",
+                "E:\\LLMproject\\HFSSagent\\scripts\\pyaedt_student_bridge.py",
+                "--port",
+                "53387"
+              ],
+              "return_code": 0,
+              "stdout": "PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].\nPyAEDT INFO: PyAEDT version 1.2.0.\nPyAEDT INFO: Initializing Desktop session.\nPyAEDT INFO: AEDT version 2025.2SV Student.\nPyAEDT INFO: AEDT installation Path D:\\Ansys\\ANSYS Inc\\ANSYS Student\\v252\\AnsysEM\nPyAEDT INFO: Connected to AEDT gRPC session on port 53387.\nPyAEDT WARNING: Service Pack is not detected. PyAEDT is currently connecting in Insecure Mode.\nPyAEDT WARNING: Please download and install latest Service Pack to use connect to AEDT in Secure Mode.\nPyAEDT INFO: Non-graphical mode detected. Disabling Desktop logs.\nPyAEDT Student bridge executed: E:\\LLMproject\\HFSSagent\\scripts\\aedt_probe.py\nPyAEDT INFO: Desktop has been released.\n",
+              "stderr": "",
+              "duration_seconds": 4.64,
+              "log_path": "E:\\LLMproject\\HFSSagent\\outputs\\module8-verification-20260720\\workspaces\\module8-alice\\scripts\\logs\\20260720T060919743411Z-python.log",
+              "artifact": {
+                "project_name": "Project14",
+                "design_name": "HFSS_Module6_Verifier10",
+                "script_id": "aedt_probe",
+                "arguments": {
+                  "nested": {
+                    "authorization": "Bearer MODULE8_ALICE_AUTH_MUST_NOT_APPEAR",
+                    "password": "MODULE8_ALICE_PASSWORD_MUST_NOT_APPEAR"
+                  },
+                  "client_marker": "module8-alice",
+                  "token": "MODULE8_ALICE_TOKEN_MUST_NOT_APPEAR"
+                },
+                "success": true
+              }
+            },
+            "warnings": [],
+            "next_actions": [
+              "list_automation_scripts",
+              "get_project_info"
+            ]
+          }
+        }
+      },
+      {
+        "client_id": "module8-bob",
+        "tool": "run_automation_script",
+        "request_meta": {
+          "client_id": "module8-bob"
+        },
+        "started_epoch": 1784527755.7652652,
+        "duration_seconds": 8.622,
+        "result": {
+          "is_error": false,
+          "raw": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\n  \"status\": \"ok\",\n  \"message\": \"HFSS automation operation finished.\",\n  \"data\": {\n    \"success\": true,\n    \"command\": [\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\.venv\\\\Scripts\\\\python.exe\",\n      \"E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\pyaedt_student_bridge.py\",\n      \"--port\",\n      \"53387\"\n    ],\n    \"return_code\": 0,\n    \"stdout\": \"PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].\\nPyAEDT INFO: PyAEDT version 1.2.0.\\nPyAEDT INFO: Initializing Desktop session.\\nPyAEDT INFO: AEDT version 2025.2SV Student.\\nPyAEDT INFO: AEDT installation Path D:\\\\Ansys\\\\ANSYS Inc\\\\ANSYS Student\\\\v252\\\\AnsysEM\\nPyAEDT INFO: Connected to AEDT gRPC session on port 53387.\\nPyAEDT WARNING: Service Pack is not detected. PyAEDT is currently connecting in Insecure Mode.\\nPyAEDT WARNING: Please download and install latest Service Pack to use connect to AEDT in Secure Mode.\\nPyAEDT INFO: Non-graphical mode detected. Disabling Desktop logs.\\nPyAEDT Student bridge executed: E:\\\\LLMproject\\\\HFSSagent\\\\scripts\\\\aedt_probe.py\\nPyAEDT INFO: Desktop has been released.\\n\",\n    \"stderr\": \"\",\n    \"duration_seconds\": 3.922,\n    \"log_path\": \"E:\\\\LLMproject\\\\HFSSagent\\\\outputs\\\\module8-verification-20260720\\\\workspaces\\\\module8-bob\\\\scripts\\\\logs\\\\20260720T060915784045Z-python.log\",\n    \"artifact\": {\n      \"project_name\": \"Project14\",\n      \"design_name\": \"HFSS_Module6_Verifier10\",\n      \"script_id\": \"aedt_probe\",\n      \"arguments\": {\n        \"authorization\": \"Bearer MODULE8_BOB_AUTH_MUST_NOT_APPEAR\",\n        \"secret\": \"MODULE8_BOB_SECRET_MUST_NOT_APPEAR\",\n        \"client_marker\": \"module8-bob\"\n      },\n      \"success\": true\n    }\n  },\n  \"warnings\": [],\n  \"next_actions\": [\n    \"list_automation_scripts\",\n    \"get_project_info\"\n  ]\n}"
+              }
+            ],
+            "isError": false
+          },
+          "parsed": {
+            "status": "ok",
+            "message": "HFSS automation operation finished.",
+            "data": {
+              "success": true,
+              "command": [
+                "E:\\LLMproject\\HFSSagent\\.venv\\Scripts\\python.exe",
+                "E:\\LLMproject\\HFSSagent\\scripts\\pyaedt_student_bridge.py",
+                "--port",
+                "53387"
+              ],
+              "return_code": 0,
+              "stdout": "PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].\nPyAEDT INFO: PyAEDT version 1.2.0.\nPyAEDT INFO: Initializing Desktop session.\nPyAEDT INFO: AEDT version 2025.2SV Student.\nPyAEDT INFO: AEDT installation Path D:\\Ansys\\ANSYS Inc\\ANSYS Student\\v252\\AnsysEM\nPyAEDT INFO: Connected to AEDT gRPC session on port 53387.\nPyAEDT WARNING: Service Pack is not detected. PyAEDT is currently connecting in Insecure Mode.\nPyAEDT WARNING: Please download and install latest Service Pack to use connect to AEDT in Secure Mode.\nPyAEDT INFO: Non-graphical mode detected. Disabling Desktop logs.\nPyAEDT Student bridge executed: E:\\LLMproject\\HFSSagent\\scripts\\aedt_probe.py\nPyAEDT INFO: Desktop has been released.\n",
+              "stderr": "",
+              "duration_seconds": 3.922,
+              "log_path": "E:\\LLMproject\\HFSSagent\\outputs\\module8-verification-20260720\\workspaces\\module8-bob\\scripts\\logs\\20260720T060915784045Z-python.log",
+              "artifact": {
+                "project_name": "Project14",
+                "design_name": "HFSS_Module6_Verifier10",
+                "script_id": "aedt_probe",
+                "arguments": {
+                  "authorization": "Bearer MODULE8_BOB_AUTH_MUST_NOT_APPEAR",
+                  "secret": "MODULE8_BOB_SECRET_MUST_NOT_APPEAR",
+                  "client_marker": "module8-bob"
+                },
+                "success": true
+              }
+            },
+            "warnings": [],
+            "next_actions": [
+              "list_automation_scripts",
+              "get_project_info"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "artifacts": {
+    "module8-alice": {
+      "path": "E:\\LLMproject\\HFSSagent\\outputs\\module8-verification-20260720\\workspaces\\module8-alice\\scripts\\module8-shared-probe.json",
+      "exists": true,
+      "size": 340,
+      "payload": {
+        "project_name": "Project14",
+        "design_name": "HFSS_Module6_Verifier10",
+        "script_id": "aedt_probe",
+        "arguments": {
+          "nested": {
+            "authorization": "Bearer MODULE8_ALICE_AUTH_MUST_NOT_APPEAR",
+            "password": "MODULE8_ALICE_PASSWORD_MUST_NOT_APPEAR"
+          },
+          "client_marker": "module8-alice",
+          "token": "MODULE8_ALICE_TOKEN_MUST_NOT_APPEAR"
+        },
+        "success": true
+      }
+    },
+    "module8-bob": {
+      "path": "E:\\LLMproject\\HFSSagent\\outputs\\module8-verification-20260720\\workspaces\\module8-bob\\scripts\\module8-shared-probe.json",
+      "exists": true,
+      "size": 270,
+      "payload": {
+        "project_name": "Project14",
+        "design_name": "HFSS_Module6_Verifier10",
+        "script_id": "aedt_probe",
+        "arguments": {
+          "authorization": "Bearer MODULE8_BOB_AUTH_MUST_NOT_APPEAR",
+          "secret": "MODULE8_BOB_SECRET_MUST_NOT_APPEAR",
+          "client_marker": "module8-bob"
+        },
+        "success": true
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from hfss_agent_mcp.backends.factory import create_backend
 from hfss_agent_mcp.config import ServerConfig
 from hfss_agent_mcp.core.service import HfssService
+from hfss_agent_mcp.core.security import install_security_hooks
 from hfss_agent_mcp.tools.registry import register_all_tools
 
 
@@ -37,4 +38,5 @@ def create_app(
         log_level=resolved_config.log_level,
     )
     register_all_tools(app, resolved_service)
+    install_security_hooks(app, resolved_service)
     return app

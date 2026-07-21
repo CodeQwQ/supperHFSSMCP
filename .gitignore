@@ -17,6 +17,8 @@ env/
 # Build artifacts
 build/
 dist/
+dist-offline/
+release-artifacts/
 *.egg-info/
 
 # Local runtime outputs

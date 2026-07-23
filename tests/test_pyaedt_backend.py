@@ -21,7 +21,14 @@ from hfss_agent_mcp.backends.pyaedt import (
 )
 from hfss_agent_mcp.config import ServerConfig
 from hfss_agent_mcp.core.errors import BackendUnavailableError
-from hfss_agent_mcp.core.models import ConnectionSpec
+from hfss_agent_mcp.core.models import (
+    BoxSpec,
+    ConnectionSpec,
+    DeleteObjectsSpec,
+    LumpedPortSpec,
+    MaterialAssignmentSpec,
+    SheetSpec,
+)
 from hfss_agent_mcp.core.models import SweepSpec
 from hfss_agent_mcp.core.service import HfssService
 
@@ -83,6 +90,88 @@ class PyAedtBackendTests(unittest.TestCase):
         self.assertEqual("XZ", calls[0]["orientation"])
         self.assertEqual([3.0, 1.6], calls[0]["sizes"])
 
+    def test_create_model_box_and_sheet_call_pyaedt_modeler(self) -> None:
+        calls: list[tuple[str, dict]] = []
+
+        class FakeModeler:
+            def create_box(self, **kwargs):
+                calls.append(("box", kwargs))
+
+            def create_rectangle(self, **kwargs):
+                calls.append(("sheet", kwargs))
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = type("FakeHfss", (), {"modeler": FakeModeler()})()
+
+        box = backend.create_model_box(
+            BoxSpec(
+                name="Airbox",
+                origin_mm=(-1.0, -1.0, -1.0),
+                size_mm=(2.0, 2.0, 2.0),
+                material="air",
+                role="airbox",
+            )
+        )
+        sheet = backend.create_model_sheet(
+            SheetSpec(
+                name="Patch",
+                orientation="XY",
+                origin_mm=(0.0, 0.0, 0.0),
+                size_mm=(10.0, 8.0),
+                material="copper",
+                role="patch",
+            )
+        )
+
+        self.assertEqual("Airbox", box["name"])
+        self.assertEqual("Patch", sheet["name"])
+        self.assertEqual("box", calls[0][0])
+        self.assertEqual([-1.0, -1.0, -1.0], calls[0][1]["origin"])
+        self.assertEqual("sheet", calls[1][0])
+        self.assertEqual("XY", calls[1][1]["orientation"])
+
+    def test_set_object_material_uses_modeler_object_when_available(self) -> None:
+        class FakeObject:
+            material_name = "air"
+
+        fake_object = FakeObject()
+
+        class FakeModeler:
+            def __getitem__(self, name: str):
+                if name != "Patch":
+                    raise KeyError(name)
+                return fake_object
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = type("FakeHfss", (), {"modeler": FakeModeler()})()
+
+        result = backend.set_object_material(
+            MaterialAssignmentSpec(object_name="Patch", material="copper")
+        )
+
+        self.assertEqual("Patch", result["object_name"])
+        self.assertEqual("copper", fake_object.material_name)
+
+    def test_delete_model_objects_calls_modeler_delete_with_explicit_names(self) -> None:
+        calls: list[list[str]] = []
+
+        class FakeModeler:
+            object_names = ["Patch", "Airbox"]
+
+            def delete(self, assignment):
+                calls.append(list(assignment))
+                self.object_names = [name for name in self.object_names if name not in assignment]
+                return True
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = type("FakeHfss", (), {"modeler": FakeModeler()})()
+
+        result = backend.delete_model_objects(DeleteObjectsSpec(object_names=("Patch",)))
+
+        self.assertEqual(["Patch"], calls[0])
+        self.assertEqual(["Patch"], result["deleted_objects"])
+        self.assertEqual(["Airbox"], result["after_objects"])
+
     def test_assign_port_passes_single_port_sheet_as_scalar(self) -> None:
         calls: list[dict] = []
 
@@ -102,6 +191,29 @@ class PyAedtBackendTests(unittest.TestCase):
             }
         )
 
+        self.assertEqual("PortSheet", calls[0]["assignment"])
+
+    def test_create_lumped_port_reuses_pyaedt_port_assignment(self) -> None:
+        calls: list[dict] = []
+
+        class FakeHfss:
+            def lumped_port(self, **kwargs):
+                calls.append(kwargs)
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = FakeHfss()
+
+        result = backend.create_lumped_port(
+            LumpedPortSpec(
+                name="FeedPort",
+                sheet_name="PortSheet",
+                integration_start_mm=(0.0, 0.0, 0.0),
+                integration_end_mm=(0.0, 1.0, 0.0),
+                impedance_ohm=50.0,
+            )
+        )
+
+        self.assertEqual("FeedPort", result["name"])
         self.assertEqual("PortSheet", calls[0]["assignment"])
 
     def test_run_simulation_uses_direct_setup_analysis(self) -> None:

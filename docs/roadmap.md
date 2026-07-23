@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将当前 v0.1 MCP 骨架逐步建设为可由团队成员 agent 远程调用的 HFSS 建模、仿真、验证服务。
+**Goal:** 将当前 v0.1 MCP 骨架逐步建设为可由团队成员 agent 远程调用的 HFSS 建模、仿真、验证服务。项目优先面向本地小模型：服务端要把领域知识、标准流程和验收规则做成 MCP resources、prompt/workflow 模板和受控动作积木，让 agent 通过学习、规划、选择和组合完成任务，而不是临时生成复杂 HFSS 自动化脚本。
 
 **Architecture:** MCP tool 层保持轻量，只负责工具暴露和参数入口；HFSS Core 负责业务编排、校验、错误返回和输出约束；Backend 层隔离 PyAEDT、COM 和 AEDT CLI 等闭源软件控制方式。每个大模块独立实现、独立验证、独立提交。
 
@@ -25,6 +25,8 @@
 4. **Backend 隔离闭源软件差异**：PyAEDT 是主路径，COM 是补充路径，AEDT CLI 是批处理和兜底路径。
 5. **每个大模块必须可验证**：没有 HFSS 时要有 mock 测试；有 HFSS 时要有 smoke test。
 6. **每个大模块单独 commit**：commit 信息简单直接，例如 `add env checks`、`add session manager`。
+7. **面向小模型设计工具面**：新增能力时优先考虑小模型能否发现、理解、选择和恢复。工具描述要清楚写出适用场景、前置条件、关键参数、返回结果和失败后的下一步；复杂设计经验应进入 resources 或 workflow，而不是要求 agent 记住 PyAEDT 细节。
+8. **受控组合优先于任意脚本**：除明确登记的服务器脚本外，MCP 不接受 agent 临时提交的任意 Python/VBScript。自由设计能力应通过参数化动作、设计变量、约束检查、recipe/workflow 编排和真实 HFSS validation 实现。
 
 ## 目标架构
 
@@ -362,6 +364,39 @@ flowchart TD
 
 - `add antenna workflows`
 - `add optimization loop`
+
+### 模块 10：Resources、Prompt 模板与动作编排
+
+**目标**
+
+为本地小模型补齐领域知识和任务组织能力，让 agent 在执行前能读取可发现的 MCP resources，理解常见天线设计流程、工具边界、推荐动作序列、验证标准和失败恢复路径。
+
+**功能范围**
+
+- 新增 resource 目录和注册机制，优先覆盖贴片天线、偶极子、标准 HFSS 仿真闭环、validation 失败诊断、结果判据分析和资源释放语义。
+- 新增 prompt/workflow 模板，例如“从需求创建天线并验证”“复现论文天线结构”“仿真失败后诊断并修复”“保留 GUI 给人工接管”。
+- 设计受控动作编排格式，用结构化步骤串联现有 tools，并允许每步声明前置条件、预期状态、失败处理和是否需要人工确认。
+- 为 tool description 和 resource 内容建立质量检查，避免描述缺失、参数语义含糊、返回值不可用或对小模型不友好。
+
+**主要文件**
+
+- 新增：`src/hfss_agent_mcp/resources/`
+- 新增：`src/hfss_agent_mcp/tools/resources.py`
+- 修改：`src/hfss_agent_mcp/server.py`
+- 修改：`src/hfss_agent_mcp/tools/registry.py`
+- 测试：`tests/test_resources.py`
+- 文档：`docs/resources.md`
+
+**验证方法**
+
+- 离线测试确认 resources 可列出、可读取，内容包含适用场景、前置条件、推荐工具序列、验证方式和失败恢复。
+- 用本地小模型或受限提示 agent 做一次 smoke test：先读取 resource，再只通过现有 tools 完成一个贴片或偶极子建模、validate、结果读取流程。
+- 对故意失败场景验证 agent 能根据 resource 中的恢复路径选择下一步，而不是请求生成任意脚本。
+
+**提交点**
+
+- `add mcp resources`
+- `add workflow prompts`
 
 ## 近期执行顺序
 

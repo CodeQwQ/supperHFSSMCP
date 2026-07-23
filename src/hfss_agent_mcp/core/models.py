@@ -58,6 +58,53 @@ class ProjectSpec:
 
 
 @dataclass(frozen=True)
+class BoxSpec:
+    name: str
+    origin_mm: tuple[float, float, float]
+    size_mm: tuple[float, float, float]
+    material: str = "air"
+    role: str = "custom"
+
+
+@dataclass(frozen=True)
+class SheetSpec:
+    name: str
+    orientation: str
+    origin_mm: tuple[float, float, float]
+    size_mm: tuple[float, float]
+    material: str = "copper"
+    role: str = "custom"
+
+
+@dataclass(frozen=True)
+class MaterialAssignmentSpec:
+    object_name: str
+    material: str
+
+
+@dataclass(frozen=True)
+class BoundarySpec:
+    name: str
+    boundary_type: str
+    object_names: tuple[str, ...]
+    is_infinite_ground: bool = False
+
+
+@dataclass(frozen=True)
+class LumpedPortSpec:
+    name: str
+    sheet_name: str
+    integration_start_mm: tuple[float, float, float]
+    integration_end_mm: tuple[float, float, float]
+    impedance_ohm: float = 50.0
+
+
+@dataclass(frozen=True)
+class DeleteObjectsSpec:
+    object_names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PatchAntennaSpec:
     name: str
     frequency_ghz: float

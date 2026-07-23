@@ -4,12 +4,18 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from hfss_agent_mcp.core.models import (
+    BoundarySpec,
+    BoxSpec,
     ConnectionSpec,
+    DeleteObjectsSpec,
     DesignSpec,
     DipoleAntennaSpec,
+    LumpedPortSpec,
+    MaterialAssignmentSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
+    SheetSpec,
     SweepSpec,
 )
 
@@ -54,6 +60,24 @@ class HfssBackend(Protocol):
         ...
 
     def get_design_summary(self, design_name: str | None = None) -> dict[str, Any]:
+        ...
+
+    def create_model_box(self, spec: BoxSpec) -> dict[str, Any]:
+        ...
+
+    def create_model_sheet(self, spec: SheetSpec) -> dict[str, Any]:
+        ...
+
+    def set_object_material(self, spec: MaterialAssignmentSpec) -> dict[str, Any]:
+        ...
+
+    def assign_boundary(self, spec: BoundarySpec) -> dict[str, Any]:
+        ...
+
+    def create_lumped_port(self, spec: LumpedPortSpec) -> dict[str, Any]:
+        ...
+
+    def delete_model_objects(self, spec: DeleteObjectsSpec) -> dict[str, Any]:
         ...
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:

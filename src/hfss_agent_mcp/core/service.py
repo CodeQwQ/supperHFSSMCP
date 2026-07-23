@@ -19,13 +19,19 @@ from hfss_agent_mcp.core.errors import (
 )
 from hfss_agent_mcp.core.jobs import JobManager
 from hfss_agent_mcp.core.models import (
+    BoundarySpec,
+    BoxSpec,
     ConnectionSpec,
+    DeleteObjectsSpec,
     DesignSpec,
     DipoleAntennaSpec,
+    LumpedPortSpec,
+    MaterialAssignmentSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SessionLaunchSpec,
     SetupSpec,
+    SheetSpec,
     SweepSpec,
     ToolResponse,
 )
@@ -287,7 +293,151 @@ class HfssService:
         return self._call(
             "HFSS design summary retrieved.",
             lambda: self.backend.get_design_summary(design_name),
-            next_actions=["set_active_design", "create_patch_antenna", "create_simulation_setup"],
+            next_actions=["set_active_design", "create_model_box", "create_patch_antenna", "create_simulation_setup"],
+        )
+
+    def create_model_box(
+        self,
+        name: str,
+        origin_mm: list[float],
+        size_mm: list[float],
+        material: str = "air",
+        role: str = "custom",
+    ) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        _require_non_empty("material", material)
+        _require_non_empty("role", role)
+        origin = _require_vector("origin_mm", origin_mm, 3)
+        size = _require_vector("size_mm", size_mm, 3)
+        for index, value in enumerate(size):
+            _require_positive(f"size_mm[{index}]", value)
+        spec = BoxSpec(
+            name=name,
+            origin_mm=(origin[0], origin[1], origin[2]),
+            size_mm=(size[0], size[1], size[2]),
+            material=material,
+            role=role,
+        )
+        return self._call(
+            "HFSS model box created.",
+            lambda: self.backend.create_model_box(spec),
+            next_actions=["create_model_sheet", "assign_radiation_boundary", "get_design_summary"],
+        )
+
+    def create_model_sheet(
+        self,
+        name: str,
+        orientation: str,
+        origin_mm: list[float],
+        size_mm: list[float],
+        material: str = "copper",
+        role: str = "custom",
+    ) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        _require_non_empty("orientation", orientation)
+        _require_non_empty("material", material)
+        _require_non_empty("role", role)
+        normalized_orientation = orientation.upper()
+        if normalized_orientation not in {"XY", "YZ", "XZ"}:
+            raise InputValidationError("orientation must be one of: XY, YZ, XZ.")
+        origin = _require_vector("origin_mm", origin_mm, 3)
+        size = _require_vector("size_mm", size_mm, 2)
+        for index, value in enumerate(size):
+            _require_positive(f"size_mm[{index}]", value)
+        spec = SheetSpec(
+            name=name,
+            orientation=normalized_orientation,
+            origin_mm=(origin[0], origin[1], origin[2]),
+            size_mm=(size[0], size[1]),
+            material=material,
+            role=role,
+        )
+        return self._call(
+            "HFSS model sheet created.",
+            lambda: self.backend.create_model_sheet(spec),
+            next_actions=["assign_perfect_e", "create_lumped_port", "get_design_summary"],
+        )
+
+    def set_object_material(self, object_name: str, material: str) -> dict[str, Any]:
+        _require_non_empty("object_name", object_name)
+        _require_non_empty("material", material)
+        spec = MaterialAssignmentSpec(object_name=object_name, material=material)
+        return self._call(
+            "HFSS object material updated.",
+            lambda: self.backend.set_object_material(spec),
+            next_actions=["get_design_summary", "validate_design"],
+        )
+
+    def assign_perfect_e(
+        self,
+        name: str,
+        object_names: list[str],
+        is_infinite_ground: bool = False,
+    ) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        objects = _require_object_names(object_names)
+        spec = BoundarySpec(
+            name=name,
+            boundary_type="perfect_e",
+            object_names=objects,
+            is_infinite_ground=is_infinite_ground,
+        )
+        return self._call(
+            "Perfect E boundary assigned.",
+            lambda: self.backend.assign_boundary(spec),
+            next_actions=["create_lumped_port", "assign_radiation_boundary", "validate_design"],
+        )
+
+    def assign_radiation_boundary(self, name: str, object_names: list[str]) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        objects = _require_object_names(object_names)
+        spec = BoundarySpec(
+            name=name,
+            boundary_type="radiation",
+            object_names=objects,
+        )
+        return self._call(
+            "Radiation boundary assigned.",
+            lambda: self.backend.assign_boundary(spec),
+            next_actions=["create_lumped_port", "create_simulation_setup", "validate_design"],
+        )
+
+    def create_lumped_port(
+        self,
+        name: str,
+        sheet_name: str,
+        integration_start_mm: list[float],
+        integration_end_mm: list[float],
+        impedance_ohm: float = 50.0,
+    ) -> dict[str, Any]:
+        _require_non_empty("name", name)
+        _require_non_empty("sheet_name", sheet_name)
+        start = _require_vector("integration_start_mm", integration_start_mm, 3)
+        end = _require_vector("integration_end_mm", integration_end_mm, 3)
+        _require_positive("impedance_ohm", impedance_ohm)
+        spec = LumpedPortSpec(
+            name=name,
+            sheet_name=sheet_name,
+            integration_start_mm=(start[0], start[1], start[2]),
+            integration_end_mm=(end[0], end[1], end[2]),
+            impedance_ohm=impedance_ohm,
+        )
+        return self._call(
+            "Lumped port created.",
+            lambda: self.backend.create_lumped_port(spec),
+            next_actions=["create_simulation_setup", "validate_design"],
+        )
+
+    def delete_model_objects(self, object_names: list[str]) -> dict[str, Any]:
+        objects = _require_object_names(object_names)
+        for object_name in objects:
+            if any(marker in object_name for marker in ("*", "?")):
+                raise InputValidationError("delete_model_objects does not support wildcards.")
+        spec = DeleteObjectsSpec(object_names=objects)
+        return self._call(
+            "HFSS model object(s) deleted.",
+            lambda: self.backend.delete_model_objects(spec),
+            next_actions=["get_design_summary", "validate_design"],
         )
 
     def create_patch_antenna(
@@ -1055,6 +1205,25 @@ class HfssService:
 def _require_non_empty(field_name: str, value: str | None) -> None:
     if not value or not value.strip():
         raise InputValidationError(f"{field_name} must be a non-empty string.")
+
+
+def _require_vector(field_name: str, value: list[float], length: int) -> tuple[float, ...]:
+    if not isinstance(value, (list, tuple)) or len(value) != length:
+        raise InputValidationError(f"{field_name} must contain exactly {length} numeric values.")
+    try:
+        return tuple(float(item) for item in value)
+    except (TypeError, ValueError) as exc:
+        raise InputValidationError(f"{field_name} must contain only numeric values.") from exc
+
+
+def _require_object_names(object_names: list[str]) -> tuple[str, ...]:
+    if not isinstance(object_names, (list, tuple)) or not object_names:
+        raise InputValidationError("object_names must contain at least one object name.")
+    normalized: list[str] = []
+    for index, object_name in enumerate(object_names):
+        _require_non_empty(f"object_names[{index}]", object_name)
+        normalized.append(object_name)
+    return tuple(normalized)
 
 
 def _require_positive(field_name: str, value: float) -> None:

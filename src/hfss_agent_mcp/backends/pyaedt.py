@@ -17,14 +17,20 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from hfss_agent_mcp.core.errors import BackendUnavailableError, SessionError
+from hfss_agent_mcp.core.errors import BackendStateError, BackendUnavailableError, SessionError
 from hfss_agent_mcp.core.models import (
+    BoundarySpec,
+    BoxSpec,
     ConnectionSpec,
+    DeleteObjectsSpec,
     DesignSpec,
     DipoleAntennaSpec,
+    LumpedPortSpec,
+    MaterialAssignmentSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
+    SheetSpec,
     SweepSpec,
 )
 from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
@@ -301,7 +307,151 @@ class PyAedtBackend:
         data = self.get_project_info()
         data["setup_count"] = len(_coerce_list(getattr(self._hfss, "setup_names", None)))
         data["setups"] = _coerce_list(getattr(self._hfss, "setup_names", None))
+        data.setdefault("object_details", {})
+        data.setdefault("boundaries", {})
+        data.setdefault("ports", {})
+        data.setdefault("variables", {})
+        data.setdefault(
+            "warnings",
+            ["PyAEDT summary includes object names; boundary and port detail extraction is limited."],
+        )
         return data
+
+    def create_model_box(self, spec: BoxSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_model_box", {"spec": asdict(spec)})
+
+        self._require_connection()
+        primitive = {
+            "name": spec.name,
+            "role": spec.role,
+            "kind": "box",
+            "origin_mm": list(spec.origin_mm),
+            "size_mm": list(spec.size_mm),
+            "material": spec.material,
+        }
+        created = self._create_geometry_primitive(primitive)
+        return {**primitive, "created_object": created}
+
+    def create_model_sheet(self, spec: SheetSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_model_sheet", {"spec": asdict(spec)})
+
+        self._require_connection()
+        primitive = {
+            "name": spec.name,
+            "role": spec.role,
+            "kind": "sheet",
+            "origin_mm": list(spec.origin_mm),
+            "size_mm": [spec.size_mm[0], spec.size_mm[1], 0.0],
+            "material": spec.material,
+            "metadata": {"orientation": spec.orientation},
+        }
+        created = self._create_geometry_primitive(primitive)
+        return {
+            "name": spec.name,
+            "role": spec.role,
+            "kind": "sheet",
+            "orientation": spec.orientation,
+            "origin_mm": list(spec.origin_mm),
+            "size_mm": list(spec.size_mm),
+            "material": spec.material,
+            "created_object": created,
+        }
+
+    def set_object_material(self, spec: MaterialAssignmentSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("set_object_material", {"spec": asdict(spec)})
+
+        self._require_connection()
+        modeler = getattr(self._hfss, "modeler", None)
+        if modeler is None:
+            raise BackendUnavailableError("The active PyAEDT object does not expose modeler.")
+        target = _modeler_object(modeler, spec.object_name)
+        if target is not None:
+            if hasattr(target, "material_name"):
+                target.material_name = spec.material
+                return {"object_name": spec.object_name, "material": spec.material}
+            if hasattr(target, "material"):
+                target.material = spec.material
+                return {"object_name": spec.object_name, "material": spec.material}
+        assign_material = getattr(self._hfss, "assign_material", None)
+        if callable(assign_material):
+            assign_material(spec.object_name, spec.material)
+            return {"object_name": spec.object_name, "material": spec.material}
+        raise BackendUnavailableError(
+            f"Unable to set material for object {spec.object_name!r}.",
+            details=self._error_details(),
+        )
+
+    def assign_boundary(self, spec: BoundarySpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("assign_boundary", {"spec": asdict(spec)})
+
+        self._require_connection()
+        boundary = {
+            "name": spec.name,
+            "boundary_type": spec.boundary_type,
+            "objects": list(spec.object_names),
+            "metadata": {"is_infinite_ground": spec.is_infinite_ground},
+        }
+        self._assign_boundary(boundary)
+        return {
+            "name": spec.name,
+            "boundary_type": spec.boundary_type,
+            "objects": list(spec.object_names),
+            "is_infinite_ground": spec.is_infinite_ground,
+        }
+
+    def create_lumped_port(self, spec: LumpedPortSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("create_lumped_port", {"spec": asdict(spec)})
+
+        self._require_connection()
+        port = {
+            "name": spec.name,
+            "port_type": "lumped",
+            "objects": [spec.sheet_name],
+            "integration_line_mm": (
+                tuple(spec.integration_start_mm),
+                tuple(spec.integration_end_mm),
+            ),
+            "impedance_ohm": spec.impedance_ohm,
+        }
+        self._assign_port(port)
+        return {
+            "name": spec.name,
+            "port_type": "lumped",
+            "objects": [spec.sheet_name],
+            "integration_line_mm": [
+                list(spec.integration_start_mm),
+                list(spec.integration_end_mm),
+            ],
+            "impedance_ohm": spec.impedance_ohm,
+        }
+
+    def delete_model_objects(self, spec: DeleteObjectsSpec) -> dict[str, Any]:
+        if self._use_process_worker:
+            return self._call_worker("delete_model_objects", {"spec": asdict(spec)})
+
+        self._require_connection()
+        modeler = getattr(self._hfss, "modeler", None)
+        if modeler is None:
+            raise BackendUnavailableError("The active PyAEDT object does not expose modeler.")
+        before = _coerce_list(getattr(modeler, "object_names", None))
+        missing = [name for name in spec.object_names if name not in before]
+        if missing:
+            raise BackendStateError(f"Object(s) do not exist: {', '.join(missing)}.")
+        delete = getattr(modeler, "delete", None)
+        if not callable(delete):
+            raise BackendUnavailableError("PyAEDT modeler does not expose delete.")
+        delete(list(spec.object_names))
+        after = _coerce_list(getattr(modeler, "object_names", None))
+        return {
+            "deleted_objects": list(spec.object_names),
+            "before_objects": before,
+            "after_objects": after,
+        }
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
         if self._use_process_worker:
@@ -701,6 +851,19 @@ def _coerce_list(value: Any) -> list[str]:
     return [str(value)]
 
 
+def _modeler_object(modeler: Any, object_name: str) -> Any | None:
+    getter = getattr(modeler, "get_object_from_name", None)
+    if callable(getter):
+        try:
+            return getter(object_name)
+        except Exception:
+            pass
+    try:
+        return modeler[object_name]
+    except Exception:
+        return None
+
+
 def _version_suffix_from_executable(executable: Path, desktop_version: str | None) -> str | None:
     if desktop_version:
         parts = desktop_version.split(".")
@@ -988,6 +1151,18 @@ def _execute_worker_command(backend: Any, command: str, args: dict[str, Any]) ->
         return backend.set_active_design(args["design_name"])
     if command == "get_design_summary":
         return backend.get_design_summary(args.get("design_name"))
+    if command == "create_model_box":
+        return backend.create_model_box(BoxSpec(**args["spec"]))
+    if command == "create_model_sheet":
+        return backend.create_model_sheet(SheetSpec(**args["spec"]))
+    if command == "set_object_material":
+        return backend.set_object_material(MaterialAssignmentSpec(**args["spec"]))
+    if command == "assign_boundary":
+        return backend.assign_boundary(BoundarySpec(**args["spec"]))
+    if command == "create_lumped_port":
+        return backend.create_lumped_port(LumpedPortSpec(**args["spec"]))
+    if command == "delete_model_objects":
+        return backend.delete_model_objects(DeleteObjectsSpec(**args["spec"]))
     if command == "create_patch_antenna":
         return backend.create_patch_antenna(PatchAntennaSpec(**args["spec"]))
     if command == "create_dipole_antenna":

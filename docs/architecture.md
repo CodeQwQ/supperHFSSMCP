@@ -5,7 +5,7 @@
 - 架构版本：v0.1
 - 日期：2026-07-08
 - 状态：骨架、工程/design 管理、贴片天线 workflow、仿真任务管理和 PyAEDT worker 进程隔离已实现；真实 Student 版既有 gRPC 会话连接已通过 smoke test，直接新建 Desktop 的首次 Project/Design 初始化仍需继续增强
-- 目标：让团队成员通过各自工作机的 agent 调用服务器端 MCP 服务，完成 HFSS 建模、仿真、验证和结果读取
+- 目标：让团队成员通过各自工作机的 agent 调用服务器端 MCP 服务，完成 HFSS 建模、仿真、验证和结果读取。项目特别面向本地小模型：MCP 服务应把 HFSS 领域知识、标准流程、工具边界和验收规则沉淀为可发现的 resources、prompt/workflow 模板和受控动作积木，使小模型不用临时编写复杂 PyAEDT 脚本，也能通过规划、选择和组合完成设计验证任务。
 
 ## 架构图
 
@@ -40,6 +40,8 @@ flowchart TD
 
 `src/hfss_agent_mcp/workflows/` 是领域 workflow 层。当前包含贴片天线 recipe 生成逻辑，负责把频率、材料和尺寸参数转换为几何、材料、边界和端口计划。
 
+未来 `resources` 能力应作为小模型的领域工作手册暴露，内容包括常见天线设计流程、工具调用序列、参数选择经验、HFSS validation 规则、典型错误诊断和失败恢复策略。Resources 不直接执行操作，负责降低小模型的领域理解负担；tools 负责执行受控动作；prompts/workflows 负责把多步任务组织成可复用流程。
+
 `src/hfss_agent_mcp/core/jobs.py` 是仿真 job 管理入口。当前提供进程内 job record，用于记录求解任务状态、开始/结束时间、失败原因和日志摘要。
 
 `src/hfss_agent_mcp/backends/` 是闭源软件适配层。当前提供 `mock` 后端用于无 HFSS 环境下跑通工具链，提供 `pyaedt` 后端作为真实 AEDT/HFSS 接入口。PyAEDT 后端已包含 Student 版 executable、`ANSYSEMSV_ROOTxxx`、桌面版本推导、Student gRPC 检测补丁和独立 worker 进程隔离；后续 COM 和官方 CLI 应作为新的 adapter 或 runner 接入，不应反向污染 core。
@@ -55,6 +57,8 @@ flowchart TD
 第三，参考 Cai-aa/CAE-Agent-Hub 的经验，后续真实后端应重视显式 session 选择，例如 PID、gRPC port、project path 和 design name，避免服务器上多个 AEDT 实例被误连。当前 `connect_hfss` 已预留 `machine`、`port`、`desktop_version`、`project_path`、`design_name` 等参数。
 
 第四，参考 gfgf2023/hfss-mcp-server 的经验，高层领域工具是提升 agent 效率的关键。当前先暴露 `create_patch_antenna`，但尺寸估算、几何计划、边界和端口不硬写在 MCP tool 中，而是留在 workflow/backend 层，避免后续天线类型扩展时工具层膨胀。
+
+第五，本项目不应把 MCP 设计成 PyAEDT API 的一对一远程包装。对小模型来说，过细的 API 会重新暴露脚本编写难题；过粗的模板又会限制自由设计。长期架构应保持三层能力：领域 resources 提供经验和约束，原子/半原子 tools 提供可组合动作，高层 workflow 提供常见闭环的捷径。所有求解路径都必须经过结构化状态读取、`validate_design` 门禁、结果判据分析和资源释放验证。
 
 ## 当前工具
 
@@ -74,6 +78,13 @@ flowchart TD
 - `create_hfss_design`：创建或切换 HFSS design。
 - `set_active_design`：切换当前 active design。
 - `get_design_summary`：读取指定或当前 design 的对象和 setup 摘要。
+- `create_model_box`：在当前 design 中创建 3D box 原子几何。
+- `create_model_sheet`：在当前 design 中创建矩形 sheet 原子几何。
+- `set_object_material`：设置一个已存在对象的材料。
+- `assign_perfect_e`：给明确对象名分配 Perfect E 边界。
+- `assign_radiation_boundary`：给明确对象名分配 Radiation 边界。
+- `create_lumped_port`：在已有 port sheet 上创建 lumped port。
+- `delete_model_objects`：删除明确命名的对象，不支持通配符或清空设计。
 - `create_patch_antenna`：创建贴片天线 workflow 对象，返回尺寸、几何、材料、边界和端口 recipe。
 - `create_dipole_antenna`：创建平面中心馈电偶极子 workflow 对象，返回两臂、端口和 radiation airbox recipe。
 - `set_design_variable`：设置一个显式 HFSS design variable。

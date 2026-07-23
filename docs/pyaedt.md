@@ -61,6 +61,12 @@ worker 已覆盖以下 backend 命令：
 - `create_design`
 - `set_active_design`
 - `get_design_summary`
+- `create_model_box`
+- `create_model_sheet`
+- `set_object_material`
+- `assign_boundary`
+- `create_lumped_port`
+- `delete_model_objects`
 - `create_patch_antenna`
 - `create_dipole_antenna`
 - `create_setup`

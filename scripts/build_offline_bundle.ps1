@@ -92,6 +92,7 @@ $DocFiles = @(
     "results.md",
     "adapters.md",
     "antenna-workflows.md",
+    "modeling.md",
     "optimization.md",
     "offline-deployment.md"
 )

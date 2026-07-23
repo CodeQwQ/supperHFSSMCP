@@ -7,12 +7,18 @@ from typing import Any
 
 from hfss_agent_mcp.core.errors import BackendStateError
 from hfss_agent_mcp.core.models import (
+    BoundarySpec,
+    BoxSpec,
     ConnectionSpec,
+    DeleteObjectsSpec,
     DesignSpec,
     DipoleAntennaSpec,
+    LumpedPortSpec,
+    MaterialAssignmentSpec,
     PatchAntennaSpec,
     ProjectSpec,
     SetupSpec,
+    SheetSpec,
     SweepSpec,
 )
 from hfss_agent_mcp.core.simulation import setup_to_dict, sweep_to_dict
@@ -183,9 +189,110 @@ class MockHfssBackend:
             "solution_type": state["solution_type"],
             "object_count": len(state["objects"]),
             "objects": sorted(state["objects"]),
+            "object_details": dict(state["objects"]),
+            "boundaries": dict(state["boundaries"]),
+            "ports": dict(state["ports"]),
+            "variables": dict(state["variables"]),
             "setup_count": len(state["setups"]),
             "setups": sorted(state["setups"]),
+            "sweeps": {
+                setup_name: sorted(sweeps)
+                for setup_name, sweeps in state["sweeps"].items()
+            },
             "solved_setups": sorted(state["solved_setups"]),
+        }
+
+    def create_model_box(self, spec: BoxSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        state["objects"][spec.name] = {
+            "name": spec.name,
+            "role": spec.role,
+            "kind": "box",
+            "origin_mm": list(spec.origin_mm),
+            "size_mm": list(spec.size_mm),
+            "material": spec.material,
+        }
+        return dict(state["objects"][spec.name])
+
+    def create_model_sheet(self, spec: SheetSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        state["objects"][spec.name] = {
+            "name": spec.name,
+            "role": spec.role,
+            "kind": "sheet",
+            "orientation": spec.orientation,
+            "origin_mm": list(spec.origin_mm),
+            "size_mm": list(spec.size_mm),
+            "material": spec.material,
+        }
+        return dict(state["objects"][spec.name])
+
+    def set_object_material(self, spec: MaterialAssignmentSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        if spec.object_name not in state["objects"]:
+            raise BackendStateError(f"Object {spec.object_name!r} does not exist.")
+        state["objects"][spec.object_name]["material"] = spec.material
+        return {"object_name": spec.object_name, "material": spec.material}
+
+    def assign_boundary(self, spec: BoundarySpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        _require_existing_objects(state, spec.object_names)
+        boundary = {
+            "name": spec.name,
+            "boundary_type": spec.boundary_type,
+            "objects": list(spec.object_names),
+            "is_infinite_ground": spec.is_infinite_ground,
+        }
+        state["boundaries"][spec.name] = boundary
+        return dict(boundary)
+
+    def create_lumped_port(self, spec: LumpedPortSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        _require_existing_objects(state, (spec.sheet_name,))
+        port = {
+            "name": spec.name,
+            "port_type": "lumped",
+            "objects": [spec.sheet_name],
+            "integration_line_mm": [
+                list(spec.integration_start_mm),
+                list(spec.integration_end_mm),
+            ],
+            "impedance_ohm": spec.impedance_ohm,
+        }
+        state["ports"][spec.name] = port
+        state["objects"][spec.name] = {
+            "name": spec.name,
+            "role": "port",
+            "kind": "port",
+            "material": "air",
+            "port_type": "lumped",
+            "assignment": port,
+        }
+        return dict(port)
+
+    def delete_model_objects(self, spec: DeleteObjectsSpec) -> dict[str, Any]:
+        state = self._active_design_state()
+        before = sorted(state["objects"])
+        _require_existing_objects(state, spec.object_names)
+        for object_name in spec.object_names:
+            state["objects"].pop(object_name, None)
+            state["ports"].pop(object_name, None)
+            state["boundaries"].pop(object_name, None)
+        deleted = set(spec.object_names)
+        state["boundaries"] = {
+            name: boundary
+            for name, boundary in state["boundaries"].items()
+            if not deleted.intersection(boundary.get("objects", []))
+        }
+        state["ports"] = {
+            name: port
+            for name, port in state["ports"].items()
+            if not deleted.intersection(port.get("objects", []))
+        }
+        return {
+            "deleted_objects": list(spec.object_names),
+            "before_objects": before,
+            "after_objects": sorted(state["objects"]),
         }
 
     def create_patch_antenna(self, spec: PatchAntennaSpec) -> dict[str, Any]:
@@ -207,6 +314,9 @@ class MockHfssBackend:
                 "port_type": port["port_type"],
                 "assignment": port,
             }
+            state["ports"][port["name"]] = dict(port)
+        for boundary in recipe["boundaries"]:
+            state["boundaries"][boundary["name"]] = dict(boundary)
         state["objects"][spec.name] = {
             "role": "patch_antenna",
             "frequency_ghz": spec.frequency_ghz,
@@ -235,6 +345,9 @@ class MockHfssBackend:
                 "port_type": port["port_type"],
                 "assignment": port,
             }
+            state["ports"][port["name"]] = dict(port)
+        for boundary in recipe["boundaries"]:
+            state["boundaries"][boundary["name"]] = dict(boundary)
         state["objects"][spec.name] = {
             "role": "dipole_antenna",
             "frequency_ghz": spec.frequency_ghz,
@@ -277,11 +390,15 @@ class MockHfssBackend:
         state = self._active_design_state()
         warnings: list[str] = []
         errors: list[str] = []
+        if not state["objects"]:
+            warnings.append("No geometry objects have been created.")
+        if not state["ports"]:
+            warnings.append("No port has been created.")
         if not any(
-            item.get("role") in {"patch_antenna", "dipole_antenna"}
-            for item in state["objects"].values()
+            boundary.get("boundary_type") == "radiation"
+            for boundary in state["boundaries"].values()
         ):
-            warnings.append("No antenna workflow object has been created.")
+            warnings.append("No radiation boundary has been assigned.")
         if not state["setups"]:
             warnings.append("No simulation setup has been created.")
         if any(not state["sweeps"].get(setup_name) for setup_name in state["setups"]):
@@ -291,6 +408,8 @@ class MockHfssBackend:
             "errors": errors,
             "warnings": warnings,
             "object_count": len(state["objects"]),
+            "port_count": len(state["ports"]),
+            "boundary_count": len(state["boundaries"]),
             "setup_count": len(state["setups"]),
             "sweep_count": sum(len(sweeps) for sweeps in state["sweeps"].values()),
         }
@@ -375,6 +494,8 @@ class MockHfssBackend:
             self.designs[design_name] = {
                 "solution_type": solution_type,
                 "objects": {},
+                "boundaries": {},
+                "ports": {},
                 "setups": {},
                 "sweeps": {},
                 "variables": {},
@@ -401,6 +522,8 @@ def _serialize_design_state(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "solution_type": state["solution_type"],
         "objects": state["objects"],
+        "boundaries": state.get("boundaries", {}),
+        "ports": state.get("ports", {}),
         "setups": {
             name: asdict(setup)
             for name, setup in state["setups"].items()
@@ -421,6 +544,8 @@ def _restore_design_state(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "solution_type": state.get("solution_type", "DrivenModal"),
         "objects": dict(state.get("objects", {})),
+        "boundaries": dict(state.get("boundaries", {})),
+        "ports": dict(state.get("ports", {})),
         "setups": {
             name: SetupSpec(**setup)
             for name, setup in state.get("setups", {}).items()
@@ -435,3 +560,9 @@ def _restore_design_state(state: dict[str, Any]) -> dict[str, Any]:
         "variables": dict(state.get("variables", {})),
         "solved_setups": set(state.get("solved_setups", [])),
     }
+
+
+def _require_existing_objects(state: dict[str, Any], object_names: tuple[str, ...]) -> None:
+    missing = [name for name in object_names if name not in state["objects"]]
+    if missing:
+        raise BackendStateError(f"Object(s) do not exist: {', '.join(missing)}.")

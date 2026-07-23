@@ -128,6 +128,33 @@ class MockHfssBackend:
         self.designs = {}
         return self.get_project_info()
 
+    def disconnect(
+        self,
+        *,
+        save_project: bool = True,
+        close_projects: bool = True,
+        close_desktop: bool = True,
+    ) -> dict[str, Any]:
+        saved = False
+        if save_project and self.connected and self.project_name is not None and self.project_path:
+            self.save_project()
+            saved = True
+        self.connected = False
+        if close_projects:
+            self.project_name = None
+            self.project_path = None
+            self.design_name = None
+            self.solution_type = "DrivenModal"
+            self.designs = {}
+        return {
+            "backend": self.name,
+            "connected": False,
+            "saved": saved,
+            "save_project": save_project,
+            "close_projects": close_projects,
+            "close_desktop": close_desktop,
+        }
+
     def create_design(self, spec: DesignSpec) -> dict[str, Any]:
         self._require_project()
         self.project_name = spec.project_name or self.project_name
@@ -208,7 +235,7 @@ class MockHfssBackend:
                 "port_type": port["port_type"],
                 "assignment": port,
             }
-        state[spec.name] = {
+        state["objects"][spec.name] = {
             "role": "dipole_antenna",
             "frequency_ghz": spec.frequency_ghz,
             "materials": recipe["materials"],
@@ -250,7 +277,10 @@ class MockHfssBackend:
         state = self._active_design_state()
         warnings: list[str] = []
         errors: list[str] = []
-        if not any(item.get("role") == "patch_antenna" for item in state["objects"].values()):
+        if not any(
+            item.get("role") in {"patch_antenna", "dipole_antenna"}
+            for item in state["objects"].values()
+        ):
             warnings.append("No antenna workflow object has been created.")
         if not state["setups"]:
             warnings.append("No simulation setup has been created.")

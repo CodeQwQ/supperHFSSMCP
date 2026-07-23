@@ -97,6 +97,35 @@ class SessionManagerTests(unittest.TestCase):
         self.assertEqual(session_id, second["data"]["session"]["session_id"])
         self.assertEqual(1, self.service.list_aedt_sessions()["data"]["count"])
 
+    def test_connect_defaults_to_graphical_mode(self) -> None:
+        connected = self.service.connect_hfss(owner="alice", design_name="GraphicalDemo")
+
+        session = connected["data"]["session"]
+
+        self.assertEqual("ok", connected["status"])
+        self.assertFalse(session["metadata"]["non_graphical"])
+
+    def test_release_connection_closes_backend_by_default(self) -> None:
+        connected = self.service.connect_hfss(owner="alice", design_name="ReleaseDemo")
+        session_id = connected["data"]["session"]["session_id"]
+
+        released = self.service.release_connection(session_id)
+
+        self.assertEqual("ok", released["status"])
+        self.assertTrue(released["data"]["release"]["save_project"])
+        self.assertTrue(released["data"]["release"]["close_desktop"])
+        self.assertFalse(self.service.backend.connected)
+
+    def test_release_connection_can_keep_desktop_process_for_manual_work(self) -> None:
+        connected = self.service.connect_hfss(owner="alice", design_name="KeepDesktopDemo")
+        session_id = connected["data"]["session"]["session_id"]
+
+        released = self.service.release_connection(session_id, close_desktop=False)
+
+        self.assertEqual("ok", released["status"])
+        self.assertFalse(released["data"]["release"]["close_desktop"])
+        self.assertFalse(self.service.backend.connected)
+
 
 if __name__ == "__main__":
     unittest.main()

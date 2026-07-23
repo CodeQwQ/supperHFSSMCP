@@ -11,7 +11,12 @@ from hfss_agent_mcp.backends.cli_runner import CliRunner
 from hfss_agent_mcp.backends.com import ComAdapter
 from hfss_agent_mcp.config import ServerConfig
 from hfss_agent_mcp.core.environment import collect_environment
-from hfss_agent_mcp.core.errors import HfssAgentError, InputValidationError, SessionError
+from hfss_agent_mcp.core.errors import (
+    BackendUnavailableError,
+    HfssAgentError,
+    InputValidationError,
+    SessionError,
+)
 from hfss_agent_mcp.core.jobs import JobManager
 from hfss_agent_mcp.core.models import (
     ConnectionSpec,
@@ -92,7 +97,7 @@ class HfssService:
         project_path: str | None = None,
         design_name: str | None = None,
         solution_type: str = "DrivenModal",
-        non_graphical: bool = True,
+        non_graphical: bool = False,
         new_desktop: bool = False,
         student_version: bool | None = None,
         machine: str | None = None,
@@ -142,12 +147,11 @@ class HfssService:
             data: dict[str, Any] = {"error_type": exc.__class__.__name__}
             if session:
                 data["session"] = session
-            return ToolResponse(
-                status="error",
-                message=str(exc),
+            return self._error_response(
+                exc,
                 data=data,
                 next_actions=["get_session_info", "env_check", "connect_hfss"],
-            ).to_dict()
+            )
 
     def list_aedt_sessions(self) -> dict[str, Any]:
         return self._call(
@@ -168,7 +172,7 @@ class HfssService:
         project_path: str | None = None,
         design_name: str | None = None,
         owner: str | None = None,
-        non_graphical: bool = True,
+        non_graphical: bool = False,
     ) -> dict[str, Any]:
         spec = SessionLaunchSpec(
             desktop_version=desktop_version,
@@ -193,11 +197,20 @@ class HfssService:
             next_actions=["connect_hfss", "release_connection"],
         )
 
-    def release_connection(self, session_id: str) -> dict[str, Any]:
+    def release_connection(
+        self,
+        session_id: str,
+        save_project: bool = True,
+        close_desktop: bool = True,
+    ) -> dict[str, Any]:
         _require_non_empty("session_id", session_id)
         return self._call(
-            "AEDT session record released.",
-            lambda: {"session": self.sessions.release(self._require_owned_session(session_id).session_id).to_dict()},
+            "AEDT session released.",
+            lambda: self._release_connection(
+                session_id,
+                save_project=save_project,
+                close_desktop=close_desktop,
+            ),
             next_actions=["list_aedt_sessions", "connect_hfss"],
         )
 
@@ -402,7 +415,7 @@ class HfssService:
 
         def evaluate(value: str) -> dict[str, Any]:
             variable = self.backend.set_design_variable(variable_name, str(value))
-            simulation = self.backend.run_simulation(setup_name)
+            simulation = self._run_validated_backend_simulation(setup_name)
             if simulation.get("status") != "completed":
                 raise BackendUnavailableError(
                     simulation.get("error", f"HFSS simulation failed for {setup_name!r}.")
@@ -877,6 +890,34 @@ class HfssService:
         record = self.sessions.mark_connected(record.session_id, spec)
         return {"session": record.to_dict(), "project": project}
 
+    def _release_connection(
+        self,
+        session_id: str,
+        *,
+        save_project: bool,
+        close_desktop: bool,
+    ) -> dict[str, Any]:
+        record = self._require_owned_session(session_id)
+        release_result: dict[str, Any] | None = None
+        if self.sessions.active_session_id == record.session_id:
+            release_result = self.backend.disconnect(
+                save_project=save_project,
+                close_projects=close_desktop,
+                close_desktop=close_desktop,
+            )
+        released = self.sessions.release(record.session_id)
+        return {
+            "session": released.to_dict(),
+            "release": release_result
+            or {
+                "save_project": save_project,
+                "close_projects": close_desktop,
+                "close_desktop": close_desktop,
+                "connected": False,
+                "note": "Session record was not the active backend connection.",
+            },
+        }
+
     def _active_session_data(self) -> dict[str, Any] | None:
         session_id = self._owned_active_session_id()
         if not session_id:
@@ -905,6 +946,17 @@ class HfssService:
         owner = self._owner()
         job = self.jobs.create(setup_name, owner=owner)
         self.jobs.start(job.job_id, "Simulation job accepted by MCP service.", owner=owner)
+        validation = self.backend.validate_design()
+        validation_failure = _validation_failure_reason(validation)
+        if validation_failure:
+            failed = self.jobs.fail(job.job_id, validation_failure, owner=owner)
+            return {
+                "setup_name": setup_name,
+                "status": "failed",
+                "failure_reason": validation_failure,
+                "validation": validation,
+                "job": failed.to_dict(),
+            }
         if not wait_for_completion:
             return {
                 "job": job.to_dict(),
@@ -947,12 +999,42 @@ class HfssService:
         try:
             return self._ok(message, operation(), next_actions=next_actions)
         except (HfssAgentError, ValueError, RuntimeError, OSError) as exc:
-            return ToolResponse(
-                status="error",
-                message=str(exc),
-                data={"error_type": exc.__class__.__name__},
+            return self._error_response(
+                exc,
                 next_actions=["health_check", "get_project_info"],
-            ).to_dict()
+            )
+
+    def _run_validated_backend_simulation(self, setup_name: str) -> dict[str, Any]:
+        validation = self.backend.validate_design()
+        validation_failure = _validation_failure_reason(validation)
+        if validation_failure:
+            raise BackendUnavailableError(
+                f"HFSS validation failed before simulation: {validation_failure}",
+                details={"validation": validation},
+            )
+        return self.backend.run_simulation(setup_name)
+
+    def _error_response(
+        self,
+        exc: BaseException,
+        *,
+        data: dict[str, Any] | None = None,
+        next_actions: list[str] | None = None,
+    ) -> dict[str, Any]:
+        payload = dict(data or {})
+        payload.setdefault("error_type", exc.__class__.__name__)
+        details = getattr(exc, "details", None)
+        if isinstance(details, dict) and details:
+            payload["details"] = details
+            for key in ("hfss_messages", "validation", "worker_traceback"):
+                if key in details:
+                    payload[key] = details[key]
+        return ToolResponse(
+            status="error",
+            message=str(exc),
+            data=payload,
+            next_actions=next_actions or ["health_check", "get_project_info"],
+        ).to_dict()
 
     def _ok(
         self,
@@ -978,3 +1060,17 @@ def _require_non_empty(field_name: str, value: str | None) -> None:
 def _require_positive(field_name: str, value: float) -> None:
     if value <= 0:
         raise InputValidationError(f"{field_name} must be positive.")
+
+
+def _validation_failure_reason(validation: dict[str, Any]) -> str | None:
+    if validation.get("valid", False):
+        return None
+    messages: list[str] = []
+    for key in ("errors", "warnings", "messages"):
+        for item in validation.get(key, []) or []:
+            text = str(item).strip()
+            if text and text not in messages:
+                messages.append(text)
+    if not messages:
+        messages.append("HFSS validation returned valid=false.")
+    return "HFSS validation failed before simulation: " + " | ".join(messages)

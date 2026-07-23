@@ -36,7 +36,7 @@ def register(mcp: FastMCP, service: HfssService) -> None:
         project_path: str | None = None,
         design_name: str | None = None,
         owner: str | None = None,
-        non_graphical: bool = True,
+        non_graphical: bool = False,
     ) -> dict:
         return service.launch_aedt(
             desktop_version=desktop_version,
@@ -52,9 +52,23 @@ def register(mcp: FastMCP, service: HfssService) -> None:
     def get_session_info(session_id: str) -> dict:
         return service.get_session_info(session_id=session_id)
 
-    @mcp.tool(description="Release one managed AEDT/HFSS session record by explicit session id.")
-    def release_connection(session_id: str) -> dict:
-        return service.release_connection(session_id=session_id)
+    @mcp.tool(
+        description=(
+            "Release one managed AEDT/HFSS session. By default this saves, closes "
+            "the active AEDT project and shuts down the AEDT desktop process. Set "
+            "close_desktop=false when the user wants to keep the GUI open for manual work."
+        )
+    )
+    def release_connection(
+        session_id: str,
+        save_project: bool = True,
+        close_desktop: bool = True,
+    ) -> dict:
+        return service.release_connection(
+            session_id=session_id,
+            save_project=save_project,
+            close_desktop=close_desktop,
+        )
 
     @mcp.tool(
         description=(
@@ -67,7 +81,7 @@ def register(mcp: FastMCP, service: HfssService) -> None:
         project_path: str | None = None,
         design_name: str | None = None,
         solution_type: str = "DrivenModal",
-        non_graphical: bool = True,
+        non_graphical: bool = False,
         new_desktop: bool = False,
         student_version: bool | None = None,
         machine: str | None = None,

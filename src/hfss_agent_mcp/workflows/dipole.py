@@ -40,6 +40,11 @@ def build_dipole_antenna(spec: DipoleAntennaSpec) -> dict[str, Any]:
         "geometry": [item.to_dict() for item in geometry],
         "boundaries": [
             BoundaryAssignment(
+                name=f"{spec.name}_perfect_e",
+                boundary_type="perfect_e",
+                objects=(names["arm_negative"], names["arm_positive"]),
+            ).to_dict(),
+            BoundaryAssignment(
                 name=f"{spec.name}_radiation",
                 boundary_type="radiation",
                 objects=(names["airbox"],),

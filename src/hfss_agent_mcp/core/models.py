@@ -22,7 +22,7 @@ class ConnectionSpec:
     project_path: str | None = None
     design_name: str | None = None
     solution_type: str = "DrivenModal"
-    non_graphical: bool = True
+    non_graphical: bool = False
     new_desktop: bool = False
     student_version: bool = False
     aedt_executable: str | None = None
@@ -41,7 +41,7 @@ class SessionLaunchSpec:
     project_path: str | None = None
     design_name: str | None = None
     owner: str | None = None
-    non_graphical: bool = True
+    non_graphical: bool = False
 
 
 @dataclass(frozen=True)

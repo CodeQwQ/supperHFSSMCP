@@ -14,6 +14,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from hfss_agent_mcp.backends.pyaedt import (
     PyAedtBackend,
     _execute_worker_command,
+    _raise_worker_error,
+    _call_release_desktop,
     _solution_data_to_points,
     _student_grpc_detection_patch,
 )
@@ -123,6 +125,15 @@ class PyAedtBackendTests(unittest.TestCase):
 
     def test_run_simulation_reports_solver_failure(self) -> None:
         class FakeHfss:
+            project_name = "Project1"
+            design_name = "Design1"
+
+            class Logger:
+                def get_messages(self, level: int = 0):
+                    return ["[error] Port has no conductors touching it."]
+
+            logger = Logger()
+
             def analyze_setup(self, name: str, blocking: bool) -> bool:
                 return False
 
@@ -132,6 +143,97 @@ class PyAedtBackendTests(unittest.TestCase):
         result = backend.run_simulation("Setup1")
 
         self.assertEqual("failed", result["status"])
+        self.assertIn("Port has no conductors", result["failure_reason"])
+        self.assertIn("Port has no conductors", result["hfss_messages"][0])
+
+    def test_assign_boundary_supports_perfecte_sheets(self) -> None:
+        calls: list[dict] = []
+
+        class FakeHfss:
+            def assign_perfecte_to_sheets(self, assignment, name, is_infinite_ground=False):
+                calls.append(
+                    {
+                        "assignment": assignment,
+                        "name": name,
+                        "is_infinite_ground": is_infinite_ground,
+                    }
+                )
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = FakeHfss()
+
+        backend._assign_boundary(
+            {
+                "name": "Dipole_perfect_e",
+                "boundary_type": "perfect_e",
+                "objects": ["arm_negative", "arm_positive"],
+            }
+        )
+
+        self.assertEqual(["arm_negative", "arm_positive"], calls[0]["assignment"])
+        self.assertEqual("Dipole_perfect_e", calls[0]["name"])
+
+    def test_release_desktop_uses_hfss_close_desktop_keyword(self) -> None:
+        calls: list[dict] = []
+
+        def release_desktop(*, close_projects=True, close_desktop=True):
+            calls.append({"close_projects": close_projects, "close_desktop": close_desktop})
+            return True
+
+        result = _call_release_desktop(
+            release_desktop,
+            close_projects=True,
+            close_desktop=False,
+        )
+
+        self.assertTrue(result)
+        self.assertEqual([{"close_projects": True, "close_desktop": False}], calls)
+
+    def test_disconnect_terminates_controlled_process_when_release_leaves_it_running(self) -> None:
+        calls: list[tuple[str, int]] = []
+
+        class FakeDesktop:
+            aedt_process_id = 12345
+
+        class FakeHfss:
+            desktop_class = FakeDesktop()
+
+            def release_desktop(self, *, close_projects=True, close_desktop=True):
+                calls.append(("release", int(close_desktop)))
+                return True
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._hfss = FakeHfss()
+
+        with patch(
+            "hfss_agent_mcp.backends.pyaedt._wait_for_process_exit",
+            side_effect=[False, True],
+        ) as wait_for_exit:
+            with patch(
+                "hfss_agent_mcp.backends.pyaedt._terminate_process_tree",
+                return_value={"method": "taskkill", "returncode": 0},
+            ) as terminate:
+                result = backend.disconnect(save_project=False, close_projects=True, close_desktop=True)
+
+        self.assertEqual([("release", 1)], calls)
+        self.assertEqual(12345, result["aedt_process_id"])
+        self.assertTrue(result["process_closed"])
+        self.assertEqual({"method": "taskkill", "returncode": 0}, result["forced_termination"])
+        terminate.assert_called_once_with(12345)
+        self.assertEqual(2, wait_for_exit.call_count)
+
+    def test_worker_error_preserves_hfss_messages_in_exception_details(self) -> None:
+        response = {
+            "status": "error",
+            "error_type": "BackendUnavailableError",
+            "message": "solve failed",
+            "hfss_messages": ["[error] Sheet is not assigned Perfect E."],
+        }
+
+        with self.assertRaises(BackendUnavailableError) as raised:
+            _raise_worker_error("run_simulation", response)
+
+        self.assertIn("Sheet is not assigned", raised.exception.details["hfss_messages"][0])
 
     def test_solution_data_rejects_nonfinite_values_at_backend_boundary(self) -> None:
         class FakeSolutionData:

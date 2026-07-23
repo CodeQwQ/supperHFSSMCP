@@ -26,6 +26,24 @@ class FailingRunBackend(MockHfssBackend):
         }
 
 
+class InvalidValidationBackend(MockHfssBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.run_called = False
+
+    def validate_design(self) -> dict:
+        return {
+            "valid": False,
+            "errors": ["HFSS validation: object has no excitation."],
+            "warnings": [],
+            "messages": ["HFSS validation: object has no excitation."],
+        }
+
+    def run_simulation(self, setup_name: str) -> dict:
+        self.run_called = True
+        return super().run_simulation(setup_name)
+
+
 class SimulationJobTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp(prefix="hfss-agent-sim-"))
@@ -120,6 +138,23 @@ class SimulationJobTests(unittest.TestCase):
         self.assertEqual("failed", run["data"]["status"])
         self.assertEqual("failed", run["data"]["job"]["status"])
         self.assertEqual("Mock backend forced a solve failure.", run["data"]["job"]["failure_reason"])
+
+    def test_run_simulation_stops_before_solver_when_validation_fails(self) -> None:
+        backend = InvalidValidationBackend()
+        service = HfssService(backend, output_root=self.tmp)
+        service.connect_hfss(owner="alice")
+        service.create_project(project_name="InvalidBeforeSolve")
+        service.create_hfss_design(design_name="DipoleInvalid")
+        service.create_dipole_antenna(name="DipoleInvalid", frequency_ghz=2.4)
+        service.create_simulation_setup("Setup1", frequency_ghz=2.4)
+
+        run = service.run_simulation("Setup1", wait_for_completion=True)
+
+        self.assertEqual("ok", run["status"])
+        self.assertEqual("failed", run["data"]["status"])
+        self.assertFalse(backend.run_called)
+        self.assertIn("validation", run["data"])
+        self.assertIn("object has no excitation", run["data"]["failure_reason"])
 
     def test_async_run_creates_queryable_running_job_record(self) -> None:
         self.service.create_simulation_setup("Setup1", frequency_ghz=2.4)

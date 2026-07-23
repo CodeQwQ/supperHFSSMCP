@@ -3,13 +3,16 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, replace
+import inspect
 from math import isfinite
 import multiprocessing as mp
 from multiprocessing.connection import Connection
 import os
 import queue
 import re
+import subprocess
 import threading
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -42,6 +45,7 @@ class PyAedtBackend:
         self._worker: _PyAedtWorkerClient | None = None
         self._hfss: Any | None = None
         self._student_version = False
+        self._non_graphical = False
 
     def health(self) -> dict[str, Any]:
         try:
@@ -63,6 +67,7 @@ class PyAedtBackend:
 
     def connect(self, spec: ConnectionSpec) -> dict[str, Any]:
         self._student_version = spec.student_version
+        self._non_graphical = spec.non_graphical
         if self._use_process_worker:
             return self._call_worker(
                 "connect",
@@ -130,7 +135,7 @@ class PyAedtBackend:
             self._hfss = Hfss(
                 project=spec.project_path,
                 new_desktop=True,
-                non_graphical=True,
+                non_graphical=self._non_graphical,
                 student_version=self._student_version,
             )
         save_project = getattr(self._hfss, "save_project", None)
@@ -177,6 +182,93 @@ class PyAedtBackend:
             self._hfss = None
             return {"backend": self.name, "connected": False, "project_loaded": False}
         raise BackendUnavailableError("The active PyAEDT object does not expose a close project API.")
+
+    def disconnect(
+        self,
+        *,
+        save_project: bool = True,
+        close_projects: bool = True,
+        close_desktop: bool = True,
+    ) -> dict[str, Any]:
+        if self._use_process_worker:
+            result = self._call_worker(
+                "disconnect",
+                {
+                    "save_project": save_project,
+                    "close_projects": close_projects,
+                    "close_desktop": close_desktop,
+                },
+            )
+            if self._worker is not None:
+                self._worker.close()
+            self._worker = None
+            return result
+
+        if self._hfss is None:
+            return {
+                "backend": self.name,
+                "connected": False,
+                "saved": False,
+                "save_project": save_project,
+                "close_projects": close_projects,
+                "close_desktop": close_desktop,
+            }
+        saved = False
+        if save_project:
+            try:
+                self.save_project()
+                saved = True
+            except Exception as exc:
+                raise BackendUnavailableError(
+                    f"Unable to save project before releasing AEDT: {exc}",
+                    details=self._error_details(),
+                ) from exc
+        release_desktop = getattr(self._hfss, "release_desktop", None)
+        if not callable(release_desktop):
+            raise BackendUnavailableError(
+                "The active PyAEDT object does not expose release_desktop.",
+                details=self._error_details(),
+            )
+        process_id = _aedt_process_id(self._hfss)
+        try:
+            release_result = _call_release_desktop(
+                release_desktop,
+                close_projects=close_projects,
+                close_desktop=close_desktop,
+            )
+        except Exception as exc:
+            raise BackendUnavailableError(
+                f"Unable to release AEDT desktop: {exc}",
+                details=self._error_details(),
+            ) from exc
+        self._hfss = None
+        process_closed = None
+        forced_termination: dict[str, Any] | None = None
+        if close_desktop and process_id:
+            process_closed = _wait_for_process_exit(process_id)
+            if not process_closed:
+                forced_termination = _terminate_process_tree(process_id)
+                process_closed = _wait_for_process_exit(process_id, timeout_seconds=5.0)
+                if not process_closed:
+                    raise BackendUnavailableError(
+                        f"AEDT process {process_id} is still running after release.",
+                        details={
+                            "aedt_process_id": process_id,
+                            "forced_termination": forced_termination,
+                        },
+                    )
+        return {
+            "backend": self.name,
+            "connected": False,
+            "saved": saved,
+            "release_result": bool(release_result) if release_result is not None else True,
+            "save_project": save_project,
+            "close_projects": close_projects,
+            "close_desktop": close_desktop,
+            "aedt_process_id": process_id,
+            "process_closed": process_closed,
+            "forced_termination": forced_termination,
+        }
 
     def create_design(self, spec: DesignSpec) -> dict[str, Any]:
         if self._use_process_worker:
@@ -334,10 +426,17 @@ class PyAedtBackend:
         # direct AEDT operation needed by this adapter.
         result = analyze_setup(name=setup_name, blocking=True)
         if not result:
+            messages = self._collect_hfss_messages()
+            failure_reason = _hfss_failure_reason(
+                messages,
+                f"HFSS solver reported failure for setup {setup_name!r}.",
+            )
             return {
                 "setup_name": setup_name,
                 "status": "failed",
-                "error": f"HFSS solver reported failure for setup {setup_name!r}.",
+                "error": failure_reason,
+                "failure_reason": failure_reason,
+                "hfss_messages": messages,
             }
         return {"setup_name": setup_name, "status": "completed"}
 
@@ -427,6 +526,19 @@ class PyAedtBackend:
         return name
 
     def _assign_boundary(self, boundary: dict[str, Any]) -> None:
+        if boundary["boundary_type"] in {"perfect_e", "perfecte", "perfect E", "Perfect E"}:
+            assign_perfecte = getattr(self._hfss, "assign_perfecte_to_sheets", None)
+            if callable(assign_perfecte):
+                assign_perfecte(
+                    list(boundary["objects"]),
+                    boundary["name"],
+                    bool(boundary.get("metadata", {}).get("is_infinite_ground", False)),
+                )
+                return
+            raise BackendUnavailableError(
+                "The active PyAEDT object does not expose assign_perfecte_to_sheets.",
+                details=self._error_details(),
+            )
         if boundary["boundary_type"] != "radiation":
             raise BackendUnavailableError(f"Unsupported boundary type: {boundary['boundary_type']}")
         assign_radiation = getattr(self._hfss, "assign_radiation_boundary_to_objects", None)
@@ -438,6 +550,40 @@ class PyAedtBackend:
             assign_radiation(list(boundary["objects"]), boundary["name"])
             return
         raise BackendUnavailableError("The active PyAEDT object does not expose a radiation boundary API.")
+
+    def _collect_hfss_messages(self, level: int = 0) -> list[str]:
+        if self._hfss is None:
+            return []
+        messages: list[str] = []
+        logger = getattr(self._hfss, "logger", None)
+        get_messages = getattr(logger, "get_messages", None)
+        if callable(get_messages):
+            try:
+                messages.extend(str(item) for item in get_messages(level=level))
+            except Exception:
+                pass
+        desktop = (
+            getattr(self._hfss, "odesktop", None)
+            or getattr(getattr(self._hfss, "desktop_class", None), "odesktop", None)
+        )
+        get_desktop_messages = getattr(desktop, "GetMessages", None)
+        if callable(get_desktop_messages):
+            project_name = getattr(self._hfss, "project_name", "") or ""
+            design_name = getattr(self._hfss, "design_name", "") or ""
+            for args in (("", "", level), (project_name, design_name, level)):
+                try:
+                    messages.extend(str(item) for item in get_desktop_messages(*args))
+                except Exception:
+                    pass
+        deduplicated: list[str] = []
+        for message in messages:
+            if message and message not in deduplicated:
+                deduplicated.append(message)
+        return deduplicated[-20:]
+
+    def _error_details(self) -> dict[str, Any]:
+        messages = self._collect_hfss_messages()
+        return {"hfss_messages": messages} if messages else {}
 
     def _assign_port(self, port: dict[str, Any]) -> None:
         if port["port_type"] != "lumped":
@@ -572,6 +718,93 @@ def _pyaedt_sweep_type(sweep_type: str) -> str:
     if sweep_type.strip().lower() in {"linearcount", "linear_count"}:
         return "Discrete"
     return sweep_type
+
+
+def _hfss_failure_reason(messages: list[str], fallback: str) -> str:
+    if not messages:
+        return fallback
+    error_like = [
+        message
+        for message in messages
+        if any(marker in message.lower() for marker in ("[error]", "error", "failed", "invalid"))
+    ]
+    selected = error_like or messages
+    return " | ".join(selected[-5:])
+
+
+def _aedt_process_id(hfss: Any) -> int | None:
+    desktop_class = getattr(hfss, "desktop_class", None)
+    process_id = getattr(desktop_class, "aedt_process_id", None)
+    if process_id is None:
+        return None
+    try:
+        return int(process_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _call_release_desktop(
+    release_desktop: Callable[..., Any],
+    *,
+    close_projects: bool,
+    close_desktop: bool,
+) -> Any:
+    try:
+        parameters = inspect.signature(release_desktop).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    if "close_desktop" in parameters:
+        return release_desktop(close_projects=close_projects, close_desktop=close_desktop)
+    if "close_on_exit" in parameters:
+        return release_desktop(close_projects=close_projects, close_on_exit=close_desktop)
+    return release_desktop(close_projects, close_desktop)
+
+
+def _is_process_alive(process_id: int) -> bool:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {process_id}", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = result.stdout.strip()
+        return result.returncode == 0 and str(process_id) in output and "No tasks" not in output
+    try:
+        os.kill(process_id, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _wait_for_process_exit(process_id: int, *, timeout_seconds: float = 20.0) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if not _is_process_alive(process_id):
+            return True
+        time.sleep(0.5)
+    return not _is_process_alive(process_id)
+
+
+def _terminate_process_tree(process_id: int) -> dict[str, Any]:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["taskkill", "/PID", str(process_id), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return {
+            "method": "taskkill",
+            "returncode": result.returncode,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        }
+    try:
+        os.kill(process_id, 15)
+    except OSError as exc:
+        return {"method": "sigterm", "error": str(exc)}
+    return {"method": "sigterm", "returncode": 0}
 
 
 def _put_result(result_queue: queue.Queue[tuple[str, Any]], result: tuple[str, Any]) -> None:
@@ -713,6 +946,7 @@ def _pyaedt_worker_main(conn: Connection) -> None:
         try:
             data = _execute_worker_command(backend, command, args)
         except BaseException as exc:
+            details = backend._error_details()
             conn.send(
                 {
                     "id": request_id,
@@ -720,6 +954,7 @@ def _pyaedt_worker_main(conn: Connection) -> None:
                     "error_type": exc.__class__.__name__,
                     "message": str(exc),
                     "traceback": traceback.format_exc(),
+                    "hfss_messages": details.get("hfss_messages", []),
                 }
             )
             continue
@@ -741,6 +976,12 @@ def _execute_worker_command(backend: Any, command: str, args: dict[str, Any]) ->
         return backend.save_project(Path(path) if path is not None else None)
     if command == "close_project":
         return backend.close_project(save=bool(args.get("save", False)))
+    if command == "disconnect":
+        return backend.disconnect(
+            save_project=bool(args.get("save_project", True)),
+            close_projects=bool(args.get("close_projects", True)),
+            close_desktop=bool(args.get("close_desktop", True)),
+        )
     if command == "create_design":
         return backend.create_design(DesignSpec(**args["spec"]))
     if command == "set_active_design":
@@ -845,11 +1086,19 @@ def _frequency_to_ghz(value: Any) -> float:
 def _raise_worker_error(command: str, response: dict[str, Any]) -> None:
     message = response.get("message") or f"PyAEDT worker command '{command}' failed."
     error_type = response.get("error_type")
+    details: dict[str, Any] = {}
+    if response.get("hfss_messages"):
+        details["hfss_messages"] = list(response["hfss_messages"])
+    if response.get("traceback"):
+        details["worker_traceback"] = response["traceback"]
     if error_type == "SessionError":
-        raise SessionError(message)
+        raise SessionError(message, details=details)
     if error_type in {"BackendUnavailableError", "InputValidationError"}:
-        raise BackendUnavailableError(message)
-    raise BackendUnavailableError(f"PyAEDT worker command '{command}' failed: {message}")
+        raise BackendUnavailableError(message, details=details)
+    raise BackendUnavailableError(
+        f"PyAEDT worker command '{command}' failed: {message}",
+        details=details,
+    )
 
 
 @contextmanager

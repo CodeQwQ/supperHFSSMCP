@@ -159,20 +159,17 @@ HFSS 求解可能很慢，agent 不能只拿到一个阻塞式函数调用结果
 真实 smoke test 已执行到以下状态：
 
 1. `pyaedt` 已安装到项目使用的 Python 运行时，`ansys.aedt.core` 可导入。
-2. 真实 MCP 服务可使用 `--backend pyaedt --transport streamable-http --host 127.0.0.1 --port 8015` 启动。
-3. MCP client 能通过 HTTP 调用 `health_check`，并能看到 `create_simulation_setup`、`create_frequency_sweep`、`validate_design`、`run_simulation`、`get_simulation_job` 等工具。
+2. 真实 MCP 服务可使用 `--backend pyaedt --transport streamable-http` 启动。
+3. MCP client 能通过 HTTP 调用 `connect_hfss`、`create_simulation_setup`、`validate_design`、`run_simulation`、`get_simulation_job` 等工具。
 4. `env_check` 能识别 Student 版 executable，且后端会自动推导 `ANSYSEMSV_ROOT252` 与 `desktop_version="2025.2"`，避免 PyAEDT 把 Student 版误判为普通商业版。
-5. 当前阻塞点位于 PyAEDT `Hfss(...)` 初始化真实 Student 版会话：无论通过 MCP `connect_hfss` 新建会话，还是直接用 Python 连接已有 gRPC 端口，都会在 PyAEDT 初始化处长时间不返回。已确认本机存在 Student 版 AEDT 进程和 gRPC 端口，例如 `53387`，端口连通性正常。
-
-因此，模块 5 的离线协议、工具暴露、job 管理和 PyAEDT 调用入口已经完成；真实 HFSS 完整闭环还需要在后续模块优先补齐 COM/CLI adapter，或进一步校准 Student 版 PyAEDT 会话启动方式。
+5. `run_simulation` 已在真实 Student 2025 R2 中验证 validation gate：空 design 会在求解前被截停，并返回 HFSS 原始 validation 错误。
 
 ## 已知限制
 
-1. 当前异步模式只创建可查询的 `running` job record，不启动后台 worker。
+1. 当前异步模式只创建可查询的 `running` job record，不启动独立后台求解队列。
 2. 当前 job registry 是进程内内存结构，MCP server 重启后 job record 会丢失。
-3. PyAEDT setup/sweep API 已接入；当前 Student 2025 R2 的真实会话初始化在 `Hfss(...)` 处卡住，真实完整闭环需要继续校准 PyAEDT、COM 或 CLI 路径。
-4. 结果读取和工程判据分析仍属于模块 6。
-5. `connect_hfss` 会根据 configured executable 自动推导 Student 版和桌面版本；若服务器使用不同安装路径，需要确认路径中包含类似 `v252` 的 AEDT 版本目录。
+3. 真实 solver 失败后的 `hfss_messages` 已有后端采集逻辑和离线回归测试；仍需要继续补充更多真实 solver 失败样本，覆盖端口、网格、材料和 license 类错误。
+4. `connect_hfss` 会根据 configured executable 自动推导 Student 版和桌面版本；若服务器使用不同安装路径，需要确认路径中包含类似 `v252` 的 AEDT 版本目录。
 
 ## 验证方法
 
@@ -199,4 +196,21 @@ HFSS 求解可能很慢，agent 不能只拿到一个阻塞式函数调用结果
 ```powershell
 $env:PYTHONPATH="E:\LLMproject\HFSSagent\src"
 & "C:\Users\ASUS\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -B -m hfss_agent_mcp list-tools --backend mock
+```
+
+## 2026-07-23 更新：仿真前 validation gate 与真实错误返回
+
+`run_simulation` 当前在进入求解器前会先执行 `validate_design`。如果 HFSS validation 返回 `valid=false`，服务会直接把 job 标记为 failed，并返回 `validation` 和 `failure_reason`，不会继续调用求解器。
+
+PyAEDT 后端在求解失败或 worker 异常时，会尽量采集 AEDT message manager / PyAEDT logger 中的真实 HFSS 消息，并通过 `hfss_messages` 返回给 agent。服务层统一异常响应会把 `details.hfss_messages` 和 `details.validation` 展开到 MCP tool response 的 `data` 中。
+
+标准仿真流程固定为：
+
+```text
+create_*_antenna
+create_simulation_setup
+create_frequency_sweep
+validate_design
+run_simulation
+get_s_parameters / analyze_s_parameters
 ```

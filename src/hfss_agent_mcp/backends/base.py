@@ -38,6 +38,15 @@ class HfssBackend(Protocol):
     def close_project(self, save: bool = False) -> dict[str, Any]:
         ...
 
+    def disconnect(
+        self,
+        *,
+        save_project: bool = True,
+        close_projects: bool = True,
+        close_desktop: bool = True,
+    ) -> dict[str, Any]:
+        ...
+
     def create_design(self, spec: DesignSpec) -> dict[str, Any]:
         ...
 

@@ -38,6 +38,8 @@ class SessionRecord:
         self.project_path = spec.project_path or self.project_path
         self.design_name = spec.design_name or self.design_name
         self.desktop_version = spec.desktop_version or self.desktop_version
+        self.metadata["non_graphical"] = spec.non_graphical
+        self.metadata["new_desktop"] = spec.new_desktop
         self.updated_at = _utc_now()
 
     def update_from_attempt(self, spec: ConnectionSpec) -> None:
@@ -50,6 +52,8 @@ class SessionRecord:
         self.desktop_version = spec.desktop_version or self.desktop_version
         if spec.connect_timeout_seconds is not None:
             self.metadata["connect_timeout_seconds"] = spec.connect_timeout_seconds
+        self.metadata["non_graphical"] = spec.non_graphical
+        self.metadata["new_desktop"] = spec.new_desktop
         self.metadata.pop("failure_reason", None)
         self.updated_at = _utc_now()
 

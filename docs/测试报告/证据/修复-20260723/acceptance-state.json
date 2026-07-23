@@ -1,0 +1,1025 @@
+{
+  "gui": {
+    "launch": {
+      "pid": 26860,
+      "port": 50121
+    },
+    "session_id": "pyaedt-0001",
+    "calls": [
+      {
+        "tool": "connect_hfss",
+        "arguments": {
+          "machine": "localhost",
+          "port": 50121,
+          "student_version": true,
+          "desktop_version": "2025.2",
+          "non_graphical": false,
+          "new_desktop": false,
+          "connect_timeout_seconds": 90
+        },
+        "duration_seconds": 3.803,
+        "response": {
+          "status": "ok",
+          "message": "Connected to HFSS session.",
+          "data": {
+            "session": {
+              "session_id": "pyaedt-0001",
+              "backend": "pyaedt",
+              "status": "connected",
+              "owner": "acceptance-gui",
+              "machine": "localhost",
+              "port": 50121,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-23T02:57:30.859696+00:00",
+              "updated_at": "2026-07-23T02:57:34.637781+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 90.0,
+                "non_graphical": false,
+                "new_desktop": false
+              }
+            },
+            "project": {
+              "backend": "pyaedt",
+              "connected": true,
+              "project_loaded": true,
+              "project_name": "Project17",
+              "project_path": "D:\\ansysProjects\\Project17.aedt",
+              "design_name": "HFSS_AML",
+              "active_design": "HFSS_AML",
+              "designs": [
+                "HFSS_AML"
+              ],
+              "solution_type": "Terminal",
+              "object_count": 0,
+              "objects": []
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_session_info",
+            "get_project_info",
+            "create_hfss_design",
+            "create_patch_antenna"
+          ]
+        }
+      },
+      {
+        "tool": "create_hfss_design",
+        "arguments": {
+          "design_name": "HFSS_GUI_Acceptance_20260723"
+        },
+        "duration_seconds": 0.455,
+        "response": {
+          "status": "ok",
+          "message": "HFSS design is ready.",
+          "data": {
+            "backend": "pyaedt",
+            "connected": true,
+            "project_loaded": true,
+            "project_name": "Project17",
+            "project_path": "D:\\ansysProjects\\Project17.aedt",
+            "design_name": "HFSS_GUI_Acceptance_20260723",
+            "active_design": "HFSS_GUI_Acceptance_20260723",
+            "designs": [
+              "HFSS_AML",
+              "HFSS_GUI_Acceptance_20260723"
+            ],
+            "solution_type": "Modal",
+            "object_count": 0,
+            "objects": []
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_design_summary",
+            "create_patch_antenna",
+            "create_simulation_setup"
+          ]
+        }
+      },
+      {
+        "tool": "create_dipole_antenna",
+        "arguments": {
+          "name": "GuiDipole20260723",
+          "frequency_ghz": 2.4
+        },
+        "duration_seconds": 0.835,
+        "response": {
+          "status": "ok",
+          "message": "Dipole antenna workflow object created.",
+          "data": {
+            "antenna_name": "GuiDipole20260723",
+            "antenna_type": "dipole",
+            "frequency_ghz": 2.4,
+            "materials": {
+              "conductor": "copper",
+              "airbox": "air"
+            },
+            "object_names": {
+              "arm_negative": "GuiDipole20260723_arm_negative",
+              "arm_positive": "GuiDipole20260723_arm_positive",
+              "port": "GuiDipole20260723_lumped_port",
+              "airbox": "GuiDipole20260723_airbox"
+            },
+            "dimensions_mm": {
+              "arm_length_mm": 29.979,
+              "arm_width_mm": 2.0,
+              "arm_thickness_mm": 0.035,
+              "gap_mm": 1.0,
+              "total_length_mm": 60.958,
+              "airbox_margin_mm": 31.228
+            },
+            "geometry": [
+              {
+                "name": "GuiDipole20260723_arm_negative",
+                "role": "arm_negative",
+                "kind": "sheet",
+                "origin_mm": [
+                  -30.479245799999998,
+                  -1.0,
+                  0.0
+                ],
+                "size_mm": [
+                  29.979245799999998,
+                  2.0,
+                  0.0
+                ],
+                "material": "copper",
+                "metadata": {}
+              },
+              {
+                "name": "GuiDipole20260723_arm_positive",
+                "role": "arm_positive",
+                "kind": "sheet",
+                "origin_mm": [
+                  0.5,
+                  -1.0,
+                  0.0
+                ],
+                "size_mm": [
+                  29.979245799999998,
+                  2.0,
+                  0.0
+                ],
+                "material": "copper",
+                "metadata": {}
+              },
+              {
+                "name": "GuiDipole20260723_lumped_port",
+                "role": "port",
+                "kind": "sheet",
+                "origin_mm": [
+                  -0.5,
+                  -1.0,
+                  0.0
+                ],
+                "size_mm": [
+                  1.0,
+                  2.0,
+                  0.0
+                ],
+                "material": "air",
+                "metadata": {
+                  "orientation": "XY",
+                  "port_sheet": true
+                }
+              },
+              {
+                "name": "GuiDipole20260723_airbox",
+                "role": "airbox",
+                "kind": "box",
+                "origin_mm": [
+                  -61.70762684166667,
+                  -31.228381041666665,
+                  -31.228381041666665
+                ],
+                "size_mm": [
+                  123.41525368333333,
+                  64.45676208333333,
+                  62.49176208333333
+                ],
+                "material": "air",
+                "metadata": {
+                  "transparent": true
+                }
+              }
+            ],
+            "boundaries": [
+              {
+                "name": "GuiDipole20260723_perfect_e",
+                "boundary_type": "perfect_e",
+                "objects": [
+                  "GuiDipole20260723_arm_negative",
+                  "GuiDipole20260723_arm_positive"
+                ],
+                "metadata": {}
+              },
+              {
+                "name": "GuiDipole20260723_radiation",
+                "boundary_type": "radiation",
+                "objects": [
+                  "GuiDipole20260723_airbox"
+                ],
+                "metadata": {}
+              }
+            ],
+            "ports": [
+              {
+                "name": "GuiDipole20260723_lumped_port",
+                "port_type": "lumped",
+                "objects": [
+                  "GuiDipole20260723_lumped_port"
+                ],
+                "integration_line_mm": [
+                  [
+                    -0.5,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.5,
+                    0.0,
+                    0.0
+                  ]
+                ],
+                "impedance_ohm": 50.0,
+                "metadata": {}
+              }
+            ],
+            "next_steps": [
+              "create_simulation_setup",
+              "validate_design",
+              "run_simulation"
+            ],
+            "created_objects": [
+              "GuiDipole20260723_arm_negative",
+              "GuiDipole20260723_arm_positive",
+              "GuiDipole20260723_lumped_port",
+              "GuiDipole20260723_airbox"
+            ]
+          },
+          "warnings": [],
+          "next_actions": [
+            "create_simulation_setup",
+            "validate_design"
+          ]
+        }
+      },
+      {
+        "tool": "create_simulation_setup",
+        "arguments": {
+          "setup_name": "Setup1",
+          "frequency_ghz": 2.4,
+          "sweep_points": 21
+        },
+        "duration_seconds": 0.157,
+        "response": {
+          "status": "ok",
+          "message": "Simulation setup created.",
+          "data": {
+            "setup_name": "Setup1",
+            "frequency_ghz": 2.4,
+            "sweep_name": "Sweep1",
+            "sweep_start_ghz": 1.0,
+            "sweep_stop_ghz": 3.0,
+            "sweep_points": 21,
+            "sweep_type": "LinearCount",
+            "max_delta_s": 0.02,
+            "max_passes": 10,
+            "min_passes": 1,
+            "adaptive": {
+              "max_delta_s": 0.02,
+              "max_passes": 10,
+              "min_passes": 1
+            },
+            "sweep": {
+              "setup_name": "Setup1",
+              "sweep_name": "Sweep1",
+              "sweep_start_ghz": 1.0,
+              "sweep_stop_ghz": 3.0,
+              "sweep_points": 21,
+              "sweep_type": "LinearCount"
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "create_frequency_sweep",
+            "validate_design",
+            "run_simulation"
+          ]
+        }
+      },
+      {
+        "tool": "validate_design",
+        "arguments": {},
+        "duration_seconds": 0.052,
+        "response": {
+          "status": "ok",
+          "message": "Design validation finished.",
+          "data": {
+            "valid": true,
+            "errors": [],
+            "warnings": [],
+            "messages": [
+              "Desktop messages:",
+              "[warning] Renormalizing the port impedance will not impact the field results if the 'Include Port Post Processing Effects' is disabled in Edit Sources. (10:57:35 AM  Jul 23, 2026)",
+              "Design validation check PASSED.",
+              "Design validation messages:",
+              "** End of design validation messages. **",
+              "Excitations check:",
+              "Analysis setup messages:",
+              "Detected setup and sweep: ",
+              "Setup1",
+              " |__ Sweep1"
+            ],
+            "raw_result": "(['Desktop messages:', \"[warning] Renormalizing the port impedance will not impact the field results if the 'Include Port Post Processing Effects' is disabled in Edit Sources. (10:57:35 AM  Jul 23, 2026)\", 'Design validation check PASSED.', 'Design validation messages:', '** End of design validation messages. **', 'Excitations check:', 'Analysis setup messages:', 'Detected setup and sweep: ', 'Setup1', ' |__ Sweep1'], True)"
+          },
+          "warnings": [],
+          "next_actions": [
+            "run_simulation",
+            "get_project_info"
+          ]
+        }
+      },
+      {
+        "tool": "get_design_summary",
+        "arguments": {},
+        "duration_seconds": 0.013,
+        "response": {
+          "status": "ok",
+          "message": "HFSS design summary retrieved.",
+          "data": {
+            "backend": "pyaedt",
+            "connected": true,
+            "project_loaded": true,
+            "project_name": "Project17",
+            "project_path": "D:\\ansysProjects\\Project17.aedt",
+            "design_name": "HFSS_GUI_Acceptance_20260723",
+            "active_design": "HFSS_GUI_Acceptance_20260723",
+            "designs": [
+              "HFSS_AML",
+              "HFSS_GUI_Acceptance_20260723"
+            ],
+            "solution_type": "Modal",
+            "object_count": 4,
+            "objects": [
+              "GuiDipole20260723_airbox",
+              "GuiDipole20260723_arm_negative",
+              "GuiDipole20260723_arm_positive",
+              "GuiDipole20260723_lumped_port"
+            ],
+            "setup_count": 1,
+            "setups": [
+              "Setup1"
+            ]
+          },
+          "warnings": [],
+          "next_actions": [
+            "set_active_design",
+            "create_patch_antenna",
+            "create_simulation_setup"
+          ]
+        }
+      }
+    ]
+  },
+  "release_close": {
+    "calls": [
+      {
+        "tool": "release_connection",
+        "arguments": {
+          "session_id": "pyaedt-0001"
+        },
+        "duration_seconds": 9.015,
+        "response": {
+          "status": "ok",
+          "message": "AEDT session released.",
+          "data": {
+            "session": {
+              "session_id": "pyaedt-0001",
+              "backend": "pyaedt",
+              "status": "released",
+              "owner": "acceptance-gui",
+              "machine": "localhost",
+              "port": 50121,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-23T02:57:30.859696+00:00",
+              "updated_at": "2026-07-23T02:58:07.735427+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 90.0,
+                "non_graphical": false,
+                "new_desktop": false
+              }
+            },
+            "release": {
+              "backend": "pyaedt",
+              "connected": false,
+              "saved": true,
+              "release_result": true,
+              "save_project": true,
+              "close_projects": true,
+              "close_desktop": true,
+              "aedt_process_id": 26860,
+              "process_closed": true,
+              "forced_termination": null
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "list_aedt_sessions",
+            "connect_hfss"
+          ]
+        }
+      }
+    ],
+    "pid": 26860,
+    "process_alive_after_release": false
+  },
+  "release_keep": {
+    "launch": {
+      "pid": 32772,
+      "port": 50122
+    },
+    "session_id": "pyaedt-0002",
+    "calls": [
+      {
+        "tool": "connect_hfss",
+        "arguments": {
+          "machine": "localhost",
+          "port": 50122,
+          "student_version": true,
+          "desktop_version": "2025.2",
+          "non_graphical": false,
+          "new_desktop": false,
+          "connect_timeout_seconds": 90
+        },
+        "duration_seconds": 3.65,
+        "response": {
+          "status": "ok",
+          "message": "Connected to HFSS session.",
+          "data": {
+            "session": {
+              "session_id": "pyaedt-0002",
+              "backend": "pyaedt",
+              "status": "connected",
+              "owner": "acceptance-keep",
+              "machine": "localhost",
+              "port": 50122,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-23T02:58:29.384549+00:00",
+              "updated_at": "2026-07-23T02:58:33.002411+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 90.0,
+                "non_graphical": false,
+                "new_desktop": false
+              }
+            },
+            "project": {
+              "backend": "pyaedt",
+              "connected": true,
+              "project_loaded": true,
+              "project_name": "Project18",
+              "project_path": "D:\\ansysProjects\\Project18.aedt",
+              "design_name": "HFSS_0IQ",
+              "active_design": "HFSS_0IQ",
+              "designs": [
+                "HFSS_0IQ"
+              ],
+              "solution_type": "Terminal",
+              "object_count": 0,
+              "objects": []
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_session_info",
+            "get_project_info",
+            "create_hfss_design",
+            "create_patch_antenna"
+          ]
+        }
+      },
+      {
+        "tool": "create_hfss_design",
+        "arguments": {
+          "design_name": "HFSS_KeepWindow_20260723"
+        },
+        "duration_seconds": 0.404,
+        "response": {
+          "status": "ok",
+          "message": "HFSS design is ready.",
+          "data": {
+            "backend": "pyaedt",
+            "connected": true,
+            "project_loaded": true,
+            "project_name": "Project18",
+            "project_path": "D:\\ansysProjects\\Project18.aedt",
+            "design_name": "HFSS_KeepWindow_20260723",
+            "active_design": "HFSS_KeepWindow_20260723",
+            "designs": [
+              "HFSS_0IQ",
+              "HFSS_KeepWindow_20260723"
+            ],
+            "solution_type": "Modal",
+            "object_count": 0,
+            "objects": []
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_design_summary",
+            "create_patch_antenna",
+            "create_simulation_setup"
+          ]
+        }
+      },
+      {
+        "tool": "create_dipole_antenna",
+        "arguments": {
+          "name": "KeepDipole20260723",
+          "frequency_ghz": 2.4
+        },
+        "duration_seconds": 0.788,
+        "response": {
+          "status": "ok",
+          "message": "Dipole antenna workflow object created.",
+          "data": {
+            "antenna_name": "KeepDipole20260723",
+            "antenna_type": "dipole",
+            "frequency_ghz": 2.4,
+            "materials": {
+              "conductor": "copper",
+              "airbox": "air"
+            },
+            "object_names": {
+              "arm_negative": "KeepDipole20260723_arm_negative",
+              "arm_positive": "KeepDipole20260723_arm_positive",
+              "port": "KeepDipole20260723_lumped_port",
+              "airbox": "KeepDipole20260723_airbox"
+            },
+            "dimensions_mm": {
+              "arm_length_mm": 29.979,
+              "arm_width_mm": 2.0,
+              "arm_thickness_mm": 0.035,
+              "gap_mm": 1.0,
+              "total_length_mm": 60.958,
+              "airbox_margin_mm": 31.228
+            },
+            "geometry": [
+              {
+                "name": "KeepDipole20260723_arm_negative",
+                "role": "arm_negative",
+                "kind": "sheet",
+                "origin_mm": [
+                  -30.479245799999998,
+                  -1.0,
+                  0.0
+                ],
+                "size_mm": [
+                  29.979245799999998,
+                  2.0,
+                  0.0
+                ],
+                "material": "copper",
+                "metadata": {}
+              },
+              {
+                "name": "KeepDipole20260723_arm_positive",
+                "role": "arm_positive",
+                "kind": "sheet",
+                "origin_mm": [
+                  0.5,
+                  -1.0,
+                  0.0
+                ],
+                "size_mm": [
+                  29.979245799999998,
+                  2.0,
+                  0.0
+                ],
+                "material": "copper",
+                "metadata": {}
+              },
+              {
+                "name": "KeepDipole20260723_lumped_port",
+                "role": "port",
+                "kind": "sheet",
+                "origin_mm": [
+                  -0.5,
+                  -1.0,
+                  0.0
+                ],
+                "size_mm": [
+                  1.0,
+                  2.0,
+                  0.0
+                ],
+                "material": "air",
+                "metadata": {
+                  "orientation": "XY",
+                  "port_sheet": true
+                }
+              },
+              {
+                "name": "KeepDipole20260723_airbox",
+                "role": "airbox",
+                "kind": "box",
+                "origin_mm": [
+                  -61.70762684166667,
+                  -31.228381041666665,
+                  -31.228381041666665
+                ],
+                "size_mm": [
+                  123.41525368333333,
+                  64.45676208333333,
+                  62.49176208333333
+                ],
+                "material": "air",
+                "metadata": {
+                  "transparent": true
+                }
+              }
+            ],
+            "boundaries": [
+              {
+                "name": "KeepDipole20260723_perfect_e",
+                "boundary_type": "perfect_e",
+                "objects": [
+                  "KeepDipole20260723_arm_negative",
+                  "KeepDipole20260723_arm_positive"
+                ],
+                "metadata": {}
+              },
+              {
+                "name": "KeepDipole20260723_radiation",
+                "boundary_type": "radiation",
+                "objects": [
+                  "KeepDipole20260723_airbox"
+                ],
+                "metadata": {}
+              }
+            ],
+            "ports": [
+              {
+                "name": "KeepDipole20260723_lumped_port",
+                "port_type": "lumped",
+                "objects": [
+                  "KeepDipole20260723_lumped_port"
+                ],
+                "integration_line_mm": [
+                  [
+                    -0.5,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.5,
+                    0.0,
+                    0.0
+                  ]
+                ],
+                "impedance_ohm": 50.0,
+                "metadata": {}
+              }
+            ],
+            "next_steps": [
+              "create_simulation_setup",
+              "validate_design",
+              "run_simulation"
+            ],
+            "created_objects": [
+              "KeepDipole20260723_arm_negative",
+              "KeepDipole20260723_arm_positive",
+              "KeepDipole20260723_lumped_port",
+              "KeepDipole20260723_airbox"
+            ]
+          },
+          "warnings": [],
+          "next_actions": [
+            "create_simulation_setup",
+            "validate_design"
+          ]
+        }
+      }
+    ],
+    "release": [
+      {
+        "tool": "release_connection",
+        "arguments": {
+          "session_id": "pyaedt-0002",
+          "close_desktop": false
+        },
+        "duration_seconds": 0.529,
+        "response": {
+          "status": "ok",
+          "message": "AEDT session released.",
+          "data": {
+            "session": {
+              "session_id": "pyaedt-0002",
+              "backend": "pyaedt",
+              "status": "released",
+              "owner": "acceptance-keep",
+              "machine": "localhost",
+              "port": 50122,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-23T02:58:29.384549+00:00",
+              "updated_at": "2026-07-23T02:58:34.971986+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 90.0,
+                "non_graphical": false,
+                "new_desktop": false
+              }
+            },
+            "release": {
+              "backend": "pyaedt",
+              "connected": false,
+              "saved": true,
+              "release_result": true,
+              "save_project": true,
+              "close_projects": false,
+              "close_desktop": false,
+              "aedt_process_id": 32772,
+              "process_closed": null,
+              "forced_termination": null
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "list_aedt_sessions",
+            "connect_hfss"
+          ]
+        }
+      }
+    ],
+    "process_alive_after_release": true
+  },
+  "invalid_validation": {
+    "launch": {
+      "pid": 30528,
+      "port": 50123
+    },
+    "session_id": "pyaedt-0001",
+    "calls": [
+      {
+        "tool": "connect_hfss",
+        "arguments": {
+          "machine": "localhost",
+          "port": 50123,
+          "student_version": true,
+          "desktop_version": "2025.2",
+          "non_graphical": false,
+          "new_desktop": false,
+          "connect_timeout_seconds": 180
+        },
+        "duration_seconds": 3.474,
+        "response": {
+          "status": "ok",
+          "message": "Connected to HFSS session.",
+          "data": {
+            "session": {
+              "session_id": "pyaedt-0001",
+              "backend": "pyaedt",
+              "status": "connected",
+              "owner": "acceptance-invalid",
+              "machine": "localhost",
+              "port": 50123,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-23T03:02:14.405758+00:00",
+              "updated_at": "2026-07-23T03:02:17.840175+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 180.0,
+                "non_graphical": false,
+                "new_desktop": false
+              }
+            },
+            "project": {
+              "backend": "pyaedt",
+              "connected": true,
+              "project_loaded": true,
+              "project_name": "Project20",
+              "project_path": "D:\\ansysProjects\\Project20.aedt",
+              "design_name": "HFSS_S39",
+              "active_design": "HFSS_S39",
+              "designs": [
+                "HFSS_S39"
+              ],
+              "solution_type": "Terminal",
+              "object_count": 0,
+              "objects": []
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_session_info",
+            "get_project_info",
+            "create_hfss_design",
+            "create_patch_antenna"
+          ]
+        }
+      },
+      {
+        "tool": "create_hfss_design",
+        "arguments": {
+          "design_name": "HFSS_Invalid_20260723"
+        },
+        "duration_seconds": 0.437,
+        "response": {
+          "status": "ok",
+          "message": "HFSS design is ready.",
+          "data": {
+            "backend": "pyaedt",
+            "connected": true,
+            "project_loaded": true,
+            "project_name": "Project20",
+            "project_path": "D:\\ansysProjects\\Project20.aedt",
+            "design_name": "HFSS_Invalid_20260723",
+            "active_design": "HFSS_Invalid_20260723",
+            "designs": [
+              "HFSS_Invalid_20260723",
+              "HFSS_S39"
+            ],
+            "solution_type": "Modal",
+            "object_count": 0,
+            "objects": []
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_design_summary",
+            "create_patch_antenna",
+            "create_simulation_setup"
+          ]
+        }
+      },
+      {
+        "tool": "create_simulation_setup",
+        "arguments": {
+          "setup_name": "SetupInvalid",
+          "frequency_ghz": 2.4,
+          "sweep_points": 11
+        },
+        "duration_seconds": 0.128,
+        "response": {
+          "status": "ok",
+          "message": "Simulation setup created.",
+          "data": {
+            "setup_name": "SetupInvalid",
+            "frequency_ghz": 2.4,
+            "sweep_name": "Sweep1",
+            "sweep_start_ghz": 1.0,
+            "sweep_stop_ghz": 3.0,
+            "sweep_points": 11,
+            "sweep_type": "LinearCount",
+            "max_delta_s": 0.02,
+            "max_passes": 10,
+            "min_passes": 1,
+            "adaptive": {
+              "max_delta_s": 0.02,
+              "max_passes": 10,
+              "min_passes": 1
+            },
+            "sweep": {
+              "setup_name": "SetupInvalid",
+              "sweep_name": "Sweep1",
+              "sweep_start_ghz": 1.0,
+              "sweep_stop_ghz": 3.0,
+              "sweep_points": 11,
+              "sweep_type": "LinearCount"
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "create_frequency_sweep",
+            "validate_design",
+            "run_simulation"
+          ]
+        }
+      },
+      {
+        "tool": "run_simulation",
+        "arguments": {
+          "setup_name": "SetupInvalid",
+          "wait_for_completion": true
+        },
+        "duration_seconds": 0.05,
+        "response": {
+          "status": "ok",
+          "message": "Simulation job started.",
+          "data": {
+            "setup_name": "SetupInvalid",
+            "status": "failed",
+            "failure_reason": "HFSS validation failed before simulation: Desktop messages: | Design validation check ERROR. | Design validation messages: | [error] There are no objects in the design. | [error] At least one material assignment should have solve inside set! | [error] Boundary Setup: An excitation must be defined in order to solve driven problems. | ** End of design validation messages. ** | Excitations check: | Analysis setup messages: | Detected setup and sweep: | SetupInvalid | |__ Sweep1",
+            "validation": {
+              "valid": false,
+              "errors": [
+                "Desktop messages:",
+                "Design validation check ERROR.",
+                "Design validation messages:",
+                "[error] There are no objects in the design.",
+                "[error] At least one material assignment should have solve inside set!",
+                "[error] Boundary Setup: An excitation must be defined in order to solve driven problems.",
+                "** End of design validation messages. **",
+                "Excitations check:",
+                "Analysis setup messages:",
+                "Detected setup and sweep: ",
+                "SetupInvalid",
+                " |__ Sweep1"
+              ],
+              "warnings": [],
+              "messages": [
+                "Desktop messages:",
+                "Design validation check ERROR.",
+                "Design validation messages:",
+                "[error] There are no objects in the design.",
+                "[error] At least one material assignment should have solve inside set!",
+                "[error] Boundary Setup: An excitation must be defined in order to solve driven problems.",
+                "** End of design validation messages. **",
+                "Excitations check:",
+                "Analysis setup messages:",
+                "Detected setup and sweep: ",
+                "SetupInvalid",
+                " |__ Sweep1"
+              ],
+              "raw_result": "(['Desktop messages:', 'Design validation check ERROR.', 'Design validation messages:', '[error] There are no objects in the design.', '[error] At least one material assignment should have solve inside set!', '[error] Boundary Setup: An excitation must be defined in order to solve driven problems.', '** End of design validation messages. **', 'Excitations check:', 'Analysis setup messages:', 'Detected setup and sweep: ', 'SetupInvalid', ' |__ Sweep1'], False)"
+            },
+            "job": {
+              "job_id": "job-0001",
+              "setup_name": "SetupInvalid",
+              "owner": "acceptance-invalid",
+              "status": "failed",
+              "created_at": "2026-07-23T03:02:18.453448+00:00",
+              "started_at": "2026-07-23T03:02:18.453448+00:00",
+              "finished_at": "2026-07-23T03:02:18.472971+00:00",
+              "log_summary": "Simulation job failed.",
+              "failure_reason": "HFSS validation failed before simulation: Desktop messages: | Design validation check ERROR. | Design validation messages: | [error] There are no objects in the design. | [error] At least one material assignment should have solve inside set! | [error] Boundary Setup: An excitation must be defined in order to solve driven problems. | ** End of design validation messages. ** | Excitations check: | Analysis setup messages: | Detected setup and sweep: | SetupInvalid | |__ Sweep1",
+              "result": {}
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "get_simulation_job",
+            "get_s_parameters",
+            "export_touchstone"
+          ]
+        }
+      }
+    ],
+    "release": [
+      {
+        "tool": "release_connection",
+        "arguments": {
+          "session_id": "pyaedt-0001"
+        },
+        "duration_seconds": 7.551,
+        "response": {
+          "status": "ok",
+          "message": "AEDT session released.",
+          "data": {
+            "session": {
+              "session_id": "pyaedt-0001",
+              "backend": "pyaedt",
+              "status": "released",
+              "owner": "acceptance-invalid",
+              "machine": "localhost",
+              "port": 50123,
+              "project_path": null,
+              "design_name": null,
+              "desktop_version": "2025.2",
+              "created_at": "2026-07-23T03:02:14.405758+00:00",
+              "updated_at": "2026-07-23T03:02:26.268924+00:00",
+              "metadata": {
+                "connect_timeout_seconds": 180.0,
+                "non_graphical": false,
+                "new_desktop": false
+              }
+            },
+            "release": {
+              "backend": "pyaedt",
+              "connected": false,
+              "saved": true,
+              "release_result": true,
+              "save_project": true,
+              "close_projects": true,
+              "close_desktop": true,
+              "aedt_process_id": 30528,
+              "process_closed": true,
+              "forced_termination": null
+            }
+          },
+          "warnings": [],
+          "next_actions": [
+            "list_aedt_sessions",
+            "connect_hfss"
+          ]
+        }
+      }
+    ]
+  }
+}

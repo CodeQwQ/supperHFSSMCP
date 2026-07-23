@@ -1,0 +1,39 @@
+INFO:     127.0.0.1:57494 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57495 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:57496 - "GET /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57497 - "POST /mcp HTTP/1.1" 200 OK
+PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].
+PyAEDT INFO: PyAEDT version 1.2.0.
+PyAEDT INFO: Initializing Desktop session.
+PyAEDT INFO: AEDT version 2025.2SV Student.
+PyAEDT INFO: AEDT installation Path D:\Ansys\ANSYS Inc\ANSYS Student\v252\AnsysEM
+PyAEDT INFO: Connected to AEDT gRPC session on port 50123.
+PyAEDT WARNING: Service Pack is not detected. PyAEDT is currently connecting in Insecure Mode.
+PyAEDT WARNING: Please download and install latest Service Pack to use connect to AEDT in Secure Mode.
+PyAEDT INFO: Project Project20 has been created.
+PyAEDT INFO: No design is present. Inserting a new design.
+PyAEDT INFO: Added design 'HFSS_S39' of type HFSS.
+PyAEDT INFO: AEDT objects correctly read
+PyAEDT INFO: Modeler class has been initialized! Elapsed time: 0m 0sec
+INFO:     127.0.0.1:57502 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57503 - "POST /mcp HTTP/1.1" 200 OK
+PyAEDT INFO: Python version 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)].
+PyAEDT INFO: PyAEDT version 1.2.0.
+PyAEDT INFO: Returning found Desktop session with PID 30528!
+PyAEDT INFO: Project Project20 set to active.
+PyAEDT INFO: Added design 'HFSS_Invalid_20260723' of type HFSS.
+PyAEDT INFO: AEDT objects correctly read
+PyAEDT INFO: Modeler class has been initialized! Elapsed time: 0m 0sec
+INFO:     127.0.0.1:57504 - "POST /mcp HTTP/1.1" 200 OK
+PyAEDT INFO: Linear count sweep Sweep1 has been correctly created.
+INFO:     127.0.0.1:57505 - "POST /mcp HTTP/1.1" 200 OK
+PyAEDT INFO: Design validation checks.
+INFO:     127.0.0.1:57506 - "DELETE /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57507 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57508 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:57509 - "GET /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57510 - "POST /mcp HTTP/1.1" 200 OK
+PyAEDT INFO: Project Project20 Saved correctly
+PyAEDT INFO: Desktop has been released and closed.
+INFO:     127.0.0.1:57511 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57512 - "DELETE /mcp HTTP/1.1" 200 OK

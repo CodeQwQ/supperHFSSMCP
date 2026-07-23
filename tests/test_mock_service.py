@@ -80,6 +80,7 @@ class MockServiceTests(unittest.TestCase):
 
     def test_design_variable_optimization_runs_bounded_loop(self) -> None:
         self.service.connect_hfss(design_name="OptimizationDemo")
+        self.service.create_patch_antenna(name="OptimizationPatch", frequency_ghz=2.4)
         self.service.create_simulation_setup(
             setup_name="Setup1",
             frequency_ghz=2.4,

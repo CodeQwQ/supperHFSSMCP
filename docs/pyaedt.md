@@ -2,10 +2,10 @@
 
 ## 版本信息
 
-- 模块版本：v0.2
-- 日期：2026-07-09
+- 模块版本：v0.3
+- 日期：2026-07-23
 - 对应模块：真实 HFSS 后端适配
-- 状态：已接入进程隔离 worker；已验证 MCP 可连接真实 AEDT Student 既有 gRPC 会话
+- 状态：已接入进程隔离 worker；已验证 MCP 可连接真实 AEDT Student 既有 gRPC 会话、图形建模、validation gate 和释放资源语义
 
 ## 模块目标
 
@@ -57,10 +57,12 @@ worker 已覆盖以下 backend 命令：
 - `open_project`
 - `save_project`
 - `close_project`
+- `disconnect`
 - `create_design`
 - `set_active_design`
 - `get_design_summary`
 - `create_patch_antenna`
+- `create_dipole_antenna`
 - `create_setup`
 - `create_frequency_sweep`
 - `validate_design`
@@ -68,12 +70,20 @@ worker 已覆盖以下 backend 命令：
 - `get_s_parameters`
 - `export_touchstone`
 
+## 2026-07-23 更新
+
+1. `disconnect` 默认保存项目、关闭项目并关闭受控 AEDT Desktop 进程；当 `close_desktop=false` 时，只释放 MCP/PyAEDT 控制权，保留 AEDT GUI 给用户手动操作。
+2. 后端会记录 `desktop_class.aedt_process_id`，默认关闭时等待该 PID 退出；若 API 返回成功但进程仍残留，会只对受控 PID 做兜底终止并返回 `forced_termination`。
+3. `Hfss.release_desktop` 与 `Desktop.release_desktop` 的参数名不同，adapter 会按当前对象签名选择 `close_desktop` 或 `close_on_exit`。
+4. `assign_boundary` 已支持 `perfect_e`，真实调用 `Hfss.assign_perfecte_to_sheets()`。
+5. `run_simulation` 和 worker 异常路径会尽量采集 AEDT message manager / PyAEDT logger 的真实消息，并通过 `hfss_messages` 或 `validation.messages` 返回给 agent。
+
 ## 已知限制
 
 1. 当前一个 `PyAedtBackend` 实例只维护一个 worker 和一个 active PyAEDT 会话，不等价于多用户多会话 broker。
-2. `connect_hfss(new_desktop=true)` 在真实 Student 2025 R2 环境中仍可能卡在首次 Project/Design 初始化；现在该卡点会被 worker 超时保护捕获，不再拖死 MCP 服务。
-3. 已验证 `connect_hfss(port=既有gRPC端口)` 可以通过 MCP 连接真实 AEDT Student 会话，并可继续调用 `get_project_info`。
-4. 后续应把 `launch_aedt` 从“只创建 session record”升级为“启动或扫描真实 AEDT gRPC 端口”，并让 agent 优先走“显式端口绑定”。
+2. 已验证 `connect_hfss(port=既有 gRPC 端口)` 可以通过 MCP 连接真实 AEDT Student 会话，并可继续调用建模、validation、释放资源等工具。
+3. Student 版连续多实例或多用户并发仍需要后续增加队列、锁或会话 broker。
+4. `launch_aedt` 的真实进程启动和端口发现能力仍需后续模块继续增强；当前真实验收脚本使用外部启动 AEDT gRPC 后再调用 `connect_hfss(port=...)`。
 
 ## 验证方法
 

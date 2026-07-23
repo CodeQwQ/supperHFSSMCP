@@ -176,14 +176,10 @@ HFSS 是长会话工程软件，服务器上可能同时存在多个 AEDT 实例
 
 ## 已知限制
 
-1. 当前 `launch_aedt` 只创建 session record，不启动真实 AEDT 进程。
-2. 当前不扫描系统中已存在的 AEDT 进程。
-3. 当前 `release_connection` 不关闭真实 AEDT Desktop，只释放 MCP server 内部 session record。
-4. 当前 session registry 是进程内内存结构，MCP server 重启后会丢失。
-5. 当前 PyAEDT 初始化通过独立 worker 子进程隔离；超时后父进程会终止 worker，因此 MCP 请求不会无限阻塞。
-6. 当前一个 PyAEDT backend 实例仍只对应一个 active worker，会话隔离还不是完整多用户 broker。
-7. `connect_hfss(port=既有gRPC端口)` 已在真实 Student 2025 R2 中通过 smoke test；`connect_hfss(new_desktop=true)` 直接新建 Desktop 的首次 Project/Design 初始化仍需后续专项增强。
-8. 多用户并发锁和输出隔离属于后续服务器部署模块。
+1. 当前 session registry 是进程内内存结构，MCP server 重启后会丢失。
+2. 当前一个 PyAEDT backend 实例仍只对应一个 active worker，会话隔离还不是完整多用户 broker。
+3. `connect_hfss(port=既有 gRPC 端口)` 已在真实 Student 2025 R2 中通过 smoke test；连续多实例或多人并发仍需要后续增加队列、锁和会话 broker。
+4. 多用户并发锁、输出隔离和权限隔离属于后续服务器部署模块。
 
 ## 验证方法
 
@@ -221,3 +217,17 @@ get_session_info
 release_connection
 connect_hfss
 ```
+
+## 2026-07-23 更新：释放资源语义
+
+`release_connection` 当前默认语义是面向用户的“释放资源”，不是仅删除 MCP session record。默认行为包括保存项目、关闭项目、关闭 AEDT Desktop 进程，并把 session record 标记为 released。
+
+如果用户明确说明“断开连接，但不要关闭 HFSS/AEDT 窗口”或“我想保留界面手动检查”，agent 应调用：
+
+```text
+release_connection(session_id, close_desktop=false)
+```
+
+此时 MCP server 会释放自身控制资源和 session record，但要求后端保留 AEDT GUI、进程和已打开工程，方便人工继续操作。
+
+`connect_hfss` 与 `launch_aedt` 的默认模式已经调整为图形模式，即 `non_graphical=false`。只有用户明确要求后台运行或服务器无桌面环境时，agent 才应传入 `non_graphical=true`。

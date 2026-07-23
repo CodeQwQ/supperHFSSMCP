@@ -2,14 +2,14 @@
 
 ## 版本信息
 
-- 模块版本：v0.2
-- 日期：2026-07-20
+- 模块版本：v0.3
+- 日期：2026-07-23
 - 对应路线：`docs/roadmap.md` 模块 9
-- 状态：偶极子 workflow 已通过真实 MCP/HFSS 验收
+- 状态：偶极子 workflow 已通过真实 MCP/HFSS 图形建模与 validation 验收
 
 ## 模块目标
 
-在贴片天线 workflow 之外，提供一个结构简单、便于真实 smoke test 的平面中心馈电偶极子。Agent 只提交频率和少量尺寸参数，服务端生成两臂、端口和辐射 airbox 的受控 recipe；MCP tool 不接收或执行任意脚本。
+在贴片天线 workflow 之外，提供一个结构简单、便于真实 smoke test 的平面中心馈电偶极子。Agent 只提交频率和少量尺寸参数，服务端生成两臂、Perfect E 边界、端口和辐射 airbox 的受控 recipe；MCP tool 不接收或执行任意脚本。
 
 ## 核心文件
 
@@ -17,7 +17,7 @@
 - `src/hfss_agent_mcp/core/models.py`：`DipoleAntennaSpec` 参数模型。
 - `src/hfss_agent_mcp/tools/antenna.py`：`create_dipole_antenna` 工具。
 - `src/hfss_agent_mcp/backends/mock.py`：离线状态落地。
-- `src/hfss_agent_mcp/backends/pyaedt.py`：真实 Modeler、radiation boundary 和 lumped port 调用。
+- `src/hfss_agent_mcp/backends/pyaedt.py`：真实 Modeler、Perfect E boundary、radiation boundary 和 lumped port 调用。
 
 ## 数据流
 
@@ -33,7 +33,7 @@ sequenceDiagram
     Tool->>Core: validated DipoleAntennaSpec
     Core->>Backend: create_dipole_antenna(spec)
     Backend->>Workflow: build_dipole_antenna(spec)
-    Workflow-->>Backend: arms + port + airbox + boundary recipe
+    Workflow-->>Backend: arms + Perfect E + port + airbox + boundary recipe
     Backend->>HFSS: create geometry and assignments
     Backend-->>Agent: dimensions, object names and next actions
 ```
@@ -53,7 +53,7 @@ Agent 通过 MCP 调用：
 }
 ```
 
-服务端返回对象名、尺寸、辐射边界、端口积分线和后续 setup/solve 工具。真实后端通过 PyAEDT worker 进入指定 AEDT session。
+服务端返回对象名、尺寸、Perfect E 边界、辐射边界、端口积分线和后续 setup/solve 工具。真实后端通过 PyAEDT worker 进入指定 AEDT session。
 
 ## 已知限制
 
@@ -67,4 +67,4 @@ Agent 通过 MCP 调用：
 & ".venv\Scripts\python.exe" -B -m unittest tests.test_dipole_workflow tests.test_mock_service -v
 ```
 
-模块验收还必须由专用 agent 通过真实 streamable HTTP MCP 请求连接 Student HFSS，调用 `create_dipole_antenna` 并读取 design summary。
+模块验收还必须由专用 agent 通过真实 streamable HTTP MCP 请求连接 Student HFSS，调用 `create_dipole_antenna`，读取 design summary，并执行 `validate_design`。真实验收中应确认 PyAEDT 日志包含 `Boundary Perfect E ... has been created.`，且 validation 返回 `Design validation check PASSED.`。

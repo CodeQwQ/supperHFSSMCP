@@ -54,12 +54,9 @@ def register(mcp: FastMCP, service: HfssService) -> None:
     def validate_design() -> dict:
         return service.validate_design()
 
-    @mcp.tool(description="Run simulation for an existing HFSS setup and track it as a job.")
-    def run_simulation(setup_name: str, wait_for_completion: bool = True) -> dict:
-        return service.run_simulation(
-            setup_name=setup_name,
-            wait_for_completion=wait_for_completion,
-        )
+    @mcp.tool(description="Run a real HFSS simulation for an existing setup and track the finished job.")
+    def run_simulation(setup_name: str) -> dict:
+        return service.run_simulation(setup_name=setup_name)
 
     @mcp.tool(description="Read the status of a tracked simulation job.")
     def get_simulation_job(job_id: str) -> dict:

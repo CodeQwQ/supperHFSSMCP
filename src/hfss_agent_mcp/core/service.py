@@ -680,11 +680,11 @@ class HfssService:
             next_actions=["run_simulation", "get_project_info"],
         )
 
-    def run_simulation(self, setup_name: str, wait_for_completion: bool = True) -> dict[str, Any]:
+    def run_simulation(self, setup_name: str) -> dict[str, Any]:
         _require_non_empty("setup_name", setup_name)
         return self._call(
             "Simulation job started.",
-            lambda: self._run_simulation_job(setup_name, wait_for_completion),
+            lambda: self._run_simulation_job(setup_name),
             next_actions=["get_simulation_job", "get_s_parameters", "export_touchstone"],
         )
 
@@ -1092,7 +1092,7 @@ class HfssService:
             )
         )
 
-    def _run_simulation_job(self, setup_name: str, wait_for_completion: bool) -> dict[str, Any]:
+    def _run_simulation_job(self, setup_name: str) -> dict[str, Any]:
         owner = self._owner()
         job = self.jobs.create(setup_name, owner=owner)
         self.jobs.start(job.job_id, "Simulation job accepted by MCP service.", owner=owner)
@@ -1106,12 +1106,6 @@ class HfssService:
                 "failure_reason": validation_failure,
                 "validation": validation,
                 "job": failed.to_dict(),
-            }
-        if not wait_for_completion:
-            return {
-                "job": job.to_dict(),
-                "status": job.status,
-                "backend_note": "Job is tracked by MCP service; backend solve has not been awaited.",
             }
 
         try:
@@ -1233,7 +1227,9 @@ def _require_positive(field_name: str, value: float) -> None:
 
 def _validation_failure_reason(validation: dict[str, Any]) -> str | None:
     if validation.get("valid", False):
-        return None
+        if _validation_has_execution_evidence(validation):
+            return None
+        return "HFSS validation failed before simulation: validation did not include execution evidence."
     messages: list[str] = []
     for key in ("errors", "warnings", "messages"):
         for item in validation.get(key, []) or []:
@@ -1243,3 +1239,11 @@ def _validation_failure_reason(validation: dict[str, Any]) -> str | None:
     if not messages:
         messages.append("HFSS validation returned valid=false.")
     return "HFSS validation failed before simulation: " + " | ".join(messages)
+
+
+def _validation_has_execution_evidence(validation: dict[str, Any]) -> bool:
+    for key in ("api", "checked_by", "validation_backend", "raw_result"):
+        value = validation.get(key)
+        if value:
+            return True
+    return bool(validation.get("messages"))

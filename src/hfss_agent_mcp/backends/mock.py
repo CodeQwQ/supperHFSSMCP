@@ -405,6 +405,8 @@ class MockHfssBackend:
             warnings.append("At least one setup does not have a frequency sweep.")
         return {
             "valid": not errors and not warnings,
+            "validation_backend": self.name,
+            "checked_by": "mock_design_state",
             "errors": errors,
             "warnings": warnings,
             "object_count": len(state["objects"]),

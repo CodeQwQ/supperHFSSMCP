@@ -83,6 +83,7 @@ worker 已覆盖以下 backend 命令：
 3. `Hfss.release_desktop` 与 `Desktop.release_desktop` 的参数名不同，adapter 会按当前对象签名选择 `close_desktop` 或 `close_on_exit`。
 4. `assign_boundary` 已支持 `perfect_e`，真实调用 `Hfss.assign_perfecte_to_sheets()`。
 5. `run_simulation` 和 worker 异常路径会尽量采集 AEDT message manager / PyAEDT logger 的真实消息，并通过 `hfss_messages` 或 `validation.messages` 返回给 agent。
+6. `run_simulation` 不再提供只创建 MCP `running` job record 的假异步模式。真实 PyAEDT 后端会先用 `validate_full_design()` 返回的 `api` / `raw_result` / `messages` 作为 validation 执行证据，再用 `analyze_setup(name=..., blocking=false)` 提交真实求解，并轮询 `are_there_simulations_running` 或 `oDesktop.AreThereSimulationsRunning()`，直到 AEDT 报告求解结束。
 
 ## 已知限制
 

@@ -52,6 +52,7 @@ class PyAedtBackend:
         self._hfss: Any | None = None
         self._student_version = False
         self._non_graphical = False
+        self._simulation_poll_interval_seconds = 2.0
 
     def health(self) -> dict[str, Any]:
         try:
@@ -557,6 +558,8 @@ class PyAedtBackend:
         messages, valid = validation if isinstance(validation, tuple) and len(validation) == 2 else ([], bool(validation))
         return {
             "valid": bool(valid),
+            "validation_backend": self.name,
+            "api": "validate_full_design",
             "errors": [] if valid else [str(message) for message in messages],
             "warnings": [],
             "messages": [str(message) for message in messages],
@@ -574,8 +577,10 @@ class PyAedtBackend:
         # Hfss.analyze() saves the active project before solving. Student AEDT
         # sessions can reject that save through gRPC, while AnalyzeSetup is the
         # direct AEDT operation needed by this adapter.
-        result = analyze_setup(name=setup_name, blocking=True)
-        if not result:
+        started = analyze_setup(name=setup_name, blocking=False)
+        observations = self._wait_until_solver_idle()
+        observed_running = any(item["running"] for item in observations)
+        if not started:
             messages = self._collect_hfss_messages()
             failure_reason = _hfss_failure_reason(
                 messages,
@@ -587,8 +592,17 @@ class PyAedtBackend:
                 "error": failure_reason,
                 "failure_reason": failure_reason,
                 "hfss_messages": messages,
+                "simulation_status_checks": len(observations),
+                "observed_running": observed_running,
+                "solver_state_observations": observations,
             }
-        return {"setup_name": setup_name, "status": "completed"}
+        return {
+            "setup_name": setup_name,
+            "status": "completed",
+            "simulation_status_checks": len(observations),
+            "observed_running": observed_running,
+            "solver_state_observations": observations,
+        }
 
     def get_s_parameters(
         self,
@@ -730,6 +744,44 @@ class PyAedtBackend:
             if message and message not in deduplicated:
                 deduplicated.append(message)
         return deduplicated[-20:]
+
+    def _wait_until_solver_idle(self) -> list[dict[str, Any]]:
+        observations: list[dict[str, Any]] = []
+        while True:
+            running = self._read_simulation_running_state()
+            observation = {
+                "check_index": len(observations) + 1,
+                "running": bool(running) if running is not None else False,
+                "status_api_available": running is not None,
+                "timestamp": time.time(),
+            }
+            observations.append(observation)
+            if running is None or not running:
+                return observations
+            time.sleep(self._simulation_poll_interval_seconds)
+
+    def _read_simulation_running_state(self) -> bool | None:
+        if self._hfss is None:
+            return None
+        candidates = [
+            self._hfss,
+            getattr(self._hfss, "desktop_class", None),
+            getattr(self._hfss, "odesktop", None),
+            getattr(getattr(self._hfss, "desktop_class", None), "odesktop", None),
+        ]
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            for name in ("are_there_simulations_running", "AreThereSimulationsRunning"):
+                missing = object()
+                value = getattr(candidate, name, missing)
+                if value is missing:
+                    continue
+                try:
+                    return bool(value() if callable(value) else value)
+                except Exception:
+                    continue
+        return None
 
     def _error_details(self) -> dict[str, Any]:
         messages = self._collect_hfss_messages()

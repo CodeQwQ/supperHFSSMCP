@@ -44,6 +44,24 @@ class InvalidValidationBackend(MockHfssBackend):
         return super().run_simulation(setup_name)
 
 
+class UnprovenValidationBackend(MockHfssBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.run_called = False
+
+    def validate_design(self) -> dict:
+        return {
+            "valid": True,
+            "errors": [],
+            "warnings": [],
+            "messages": [],
+        }
+
+    def run_simulation(self, setup_name: str) -> dict:
+        self.run_called = True
+        return super().run_simulation(setup_name)
+
+
 class SimulationJobTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp(prefix="hfss-agent-sim-"))
@@ -63,6 +81,13 @@ class SimulationJobTests(unittest.TestCase):
 
         self.assertIn("create_frequency_sweep", names)
         self.assertIn("get_simulation_job", names)
+
+    def test_run_simulation_tool_schema_has_no_fake_async_flag(self) -> None:
+        app = create_app(ServerConfig(backend="mock"))
+        tools = asyncio.run(app.list_tools())
+        run_tool = next(tool for tool in tools if tool.name == "run_simulation")
+
+        self.assertEqual(["setup_name"], sorted(run_tool.inputSchema["properties"]))
 
     def test_setup_and_frequency_sweep_are_managed_independently(self) -> None:
         setup = self.service.create_simulation_setup(
@@ -112,7 +137,7 @@ class SimulationJobTests(unittest.TestCase):
             sweep_points=101,
         )
 
-        run = self.service.run_simulation("Setup1", wait_for_completion=True)
+        run = self.service.run_simulation("Setup1")
 
         self.assertEqual("ok", run["status"])
         self.assertEqual("completed", run["data"]["job"]["status"])
@@ -132,7 +157,7 @@ class SimulationJobTests(unittest.TestCase):
         service.create_patch_antenna(name="Patch2G4", frequency_ghz=2.4)
         service.create_simulation_setup("Setup1", frequency_ghz=2.4)
 
-        run = service.run_simulation("Setup1", wait_for_completion=True)
+        run = service.run_simulation("Setup1")
 
         self.assertEqual("ok", run["status"])
         self.assertEqual("failed", run["data"]["status"])
@@ -148,7 +173,7 @@ class SimulationJobTests(unittest.TestCase):
         service.create_dipole_antenna(name="DipoleInvalid", frequency_ghz=2.4)
         service.create_simulation_setup("Setup1", frequency_ghz=2.4)
 
-        run = service.run_simulation("Setup1", wait_for_completion=True)
+        run = service.run_simulation("Setup1")
 
         self.assertEqual("ok", run["status"])
         self.assertEqual("failed", run["data"]["status"])
@@ -156,17 +181,34 @@ class SimulationJobTests(unittest.TestCase):
         self.assertIn("validation", run["data"])
         self.assertIn("object has no excitation", run["data"]["failure_reason"])
 
-    def test_async_run_creates_queryable_running_job_record(self) -> None:
-        self.service.create_simulation_setup("Setup1", frequency_ghz=2.4)
+    def test_run_simulation_rejects_validation_without_execution_evidence(self) -> None:
+        backend = UnprovenValidationBackend()
+        service = HfssService(backend, output_root=self.tmp)
+        service.connect_hfss(owner="alice")
+        service.create_project(project_name="UnprovenValidation")
+        service.create_hfss_design(design_name="DipoleUnproven")
+        service.create_dipole_antenna(name="DipoleUnproven", frequency_ghz=2.4)
+        service.create_simulation_setup("Setup1", frequency_ghz=2.4)
 
-        run = self.service.run_simulation("Setup1", wait_for_completion=False)
+        run = service.run_simulation("Setup1")
 
         self.assertEqual("ok", run["status"])
-        self.assertEqual("running", run["data"]["job"]["status"])
+        self.assertEqual("failed", run["data"]["status"])
+        self.assertFalse(backend.run_called)
+        self.assertIn("did not include execution evidence", run["data"]["failure_reason"])
+
+    def test_run_simulation_always_invokes_backend_solver(self) -> None:
+        self.service.create_simulation_setup("Setup1", frequency_ghz=2.4)
+
+        run = self.service.run_simulation("Setup1")
+
+        self.assertEqual("ok", run["status"])
+        self.assertEqual("completed", run["data"]["job"]["status"])
+        self.assertEqual("Mock backend did not invoke AEDT.", run["data"]["backend_note"])
         self.assertIn("get_simulation_job", run["next_actions"])
 
         job = self.service.get_simulation_job(run["data"]["job"]["job_id"])
-        self.assertEqual("running", job["data"]["job"]["status"])
+        self.assertEqual("completed", job["data"]["job"]["status"])
 
     def test_unknown_job_returns_structured_error(self) -> None:
         result = self.service.get_simulation_job("missing-job")

@@ -63,6 +63,7 @@ class PyAedtBackendTests(unittest.TestCase):
 
         self.assertTrue(result["valid"])
         self.assertEqual(["Design validation check PASSED."], result["messages"])
+        self.assertEqual("validate_full_design", result["api"])
         self.assertEqual(["validate_full_design"], calls)
 
     def test_create_geometry_uses_port_sheet_orientation(self) -> None:
@@ -216,24 +217,37 @@ class PyAedtBackendTests(unittest.TestCase):
         self.assertEqual("FeedPort", result["name"])
         self.assertEqual("PortSheet", calls[0]["assignment"])
 
-    def test_run_simulation_uses_direct_setup_analysis(self) -> None:
-        calls: list[tuple[str, str]] = []
+    def test_run_simulation_starts_solver_and_polls_until_aedt_is_idle(self) -> None:
+        calls: list[tuple[str, str | bool]] = []
 
         class FakeHfss:
             def analyze_setup(self, name: str, blocking: bool) -> bool:
                 calls.append(("analyze_setup", name))
+                calls.append(("blocking", blocking))
                 return True
+
+            _running = [True, True, False]
+
+            @property
+            def are_there_simulations_running(self) -> bool:
+                value = self._running.pop(0)
+                calls.append(("running", value))
+                return value
 
             def analyze(self, **kwargs):
                 raise AssertionError("run_simulation must not invoke analyze()")
 
         backend = PyAedtBackend(use_process_worker=False)
+        backend._simulation_poll_interval_seconds = 0.0
         backend._hfss = FakeHfss()
 
         result = backend.run_simulation("Setup1")
 
-        self.assertEqual({"setup_name": "Setup1", "status": "completed"}, result)
-        self.assertEqual([("analyze_setup", "Setup1")], calls)
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(3, result["simulation_status_checks"])
+        self.assertTrue(result["observed_running"])
+        self.assertIn(("blocking", False), calls)
+        self.assertEqual(("running", True), calls[2])
 
     def test_run_simulation_reports_solver_failure(self) -> None:
         class FakeHfss:
@@ -247,6 +261,10 @@ class PyAedtBackendTests(unittest.TestCase):
             logger = Logger()
 
             def analyze_setup(self, name: str, blocking: bool) -> bool:
+                return False
+
+            @property
+            def are_there_simulations_running(self) -> bool:
                 return False
 
         backend = PyAedtBackend(use_process_worker=False)

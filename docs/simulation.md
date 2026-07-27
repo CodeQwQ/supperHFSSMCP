@@ -11,7 +11,7 @@
 
 仿真设置与任务管理模块用于让 agent 在完成工程、design 和几何建模后，继续创建 HFSS setup/sweep、验证设计、启动求解，并通过 job id 查询求解状态。
 
-该模块建立的是“可跟踪仿真任务”的骨架。同步求解路径会直接等待 backend 返回结果；异步路径当前先创建 MCP server 内部 job record 并返回 `running` 状态，后台 worker、真实非阻塞求解和日志持续采集属于后续任务队列/部署模块继续增强。
+该模块建立的是“可跟踪真实仿真任务”的骨架。`run_simulation` 不提供只创建 `running` job record 的假异步模式；只要 MCP client 请求仿真，服务层就必须先完成有证据的 `validate_design`，然后把求解提交到后端。真实 PyAEDT 后端提交求解后会定时读取 AEDT 仿真状态，直到 AEDT 报告不再有仿真运行，再把 job 标记为 completed 或 failed。
 
 ## 架构位置
 
@@ -49,8 +49,8 @@ flowchart TD
 - `src/hfss_agent_mcp/tools/simulation.py`：暴露 MCP tools。
 - `src/hfss_agent_mcp/backends/mock.py`：实现离线 setup/sweep/validate/run 行为。
 - `src/hfss_agent_mcp/backends/pyaedt.py`：实现 PyAEDT setup/sweep/validate/run 入口。
-- `tests/test_simulation_jobs.py`：覆盖 setup/sweep、同步 job、异步 job、失败 job 和未知 job。
-- `tests/test_pyaedt_backend.py`：覆盖 Student 版 AEDT executable 到 PyAEDT 环境变量、版本推导的适配逻辑。
+- `tests/test_simulation_jobs.py`：覆盖 setup/sweep、真实求解 job、validation gate、失败 job 和未知 job。
+- `tests/test_pyaedt_backend.py`：覆盖 Student 版 AEDT executable 到 PyAEDT 环境变量、版本推导、真实 validation API 和求解状态轮询的适配逻辑。
 
 ## MCP Tools
 
@@ -84,29 +84,34 @@ flowchart TD
 
 ### `validate_design`
 
-真实 PyAEDT 后端通过 `Hfss.validate_full_design()` 执行 HFSS 的设计校验，并把校验消息转换为服务层统一的 `valid`、`errors`、`warnings`、`messages` 字段。不能调用不存在的 `Hfss.validate_design()`。
+真实 PyAEDT 后端通过 `Hfss.validate_full_design()` 执行 HFSS 的设计校验，并把校验消息转换为服务层统一的 `valid`、`errors`、`warnings`、`messages` 字段。返回中还会带上 `validation_backend="pyaedt"`、`api="validate_full_design"` 和 `raw_result`，作为服务层判断“确实执行过 validation”的证据。不能调用不存在的 `Hfss.validate_design()`。
 
 验证当前 active design。返回结构化字段：
 - `valid`
+- `validation_backend`
+- `api` 或 `checked_by`
 - `errors`
 - `warnings`
+- `messages`
 - `object_count`
 - `setup_count`
 - `sweep_count`
 
 ### `run_simulation`
 
-PyAEDT 适配器对真实 HFSS 使用 `analyze_setup(name=..., blocking=True)` 直接提交指定 setup。这里不调用高层 `Hfss.analyze(setup=...)`，因为该高层方法会先执行工程保存；在 Student AEDT 的已有 gRPC 会话中，保存可能被 AEDT 拒绝并阻断求解。该适配策略保留 setup 级求解能力，同时避免把保存工程和求解动作强耦合。
+PyAEDT 适配器对真实 HFSS 使用 `analyze_setup(name=..., blocking=False)` 直接提交指定 setup，然后定时读取 `are_there_simulations_running` 或底层 `oDesktop.AreThereSimulationsRunning()`，直到 AEDT 报告求解结束。这里不调用高层 `Hfss.analyze(setup=...)`，因为该高层方法会先执行工程保存；在 Student AEDT 的已有 gRPC 会话中，保存可能被 AEDT 拒绝并阻断求解。该适配策略保留 setup 级求解能力，同时避免把保存工程和求解动作强耦合。
 
-启动 setup 求解，并创建 job record。
+启动 setup 求解，并创建 job record。服务层会在求解前再次调用 `validate_design`；如果 validation 返回 `valid=true` 但没有 `api`、`checked_by`、`validation_backend`、`raw_result` 或真实 messages 等执行证据，也会拒绝进入求解器。
 
 参数：
 - `setup_name`
-- `wait_for_completion`：`true` 时同步等待 backend 返回；`false` 时只创建可查询的运行中 job record。
 
 返回：
 - `status`
 - `job`
+- `simulation_status_checks`
+- `observed_running`
+- `solver_state_observations`
 - backend 求解结果或失败原因。
 
 ### `get_simulation_job`
@@ -130,22 +135,20 @@ sequenceDiagram
     Backend-->>Service: setup + default sweep
     Service-->>Agent: ToolResponse
 
-    Agent->>Tool: run_simulation(setup_name, wait_for_completion)
+    Agent->>Tool: run_simulation(setup_name)
     Tool->>Service: run_simulation(...)
     Service->>Jobs: create + start job
-    alt wait_for_completion = true
-        Service->>Backend: run_simulation(setup_name)
-        Backend-->>Service: completed or failed result
-        Service->>Jobs: complete or fail job
-    else wait_for_completion = false
-        Service-->>Agent: running job
-    end
+    Service->>Backend: validate_design()
+    Backend-->>Service: validation + execution evidence
+    Service->>Backend: run_simulation(setup_name)
+    Backend-->>Service: completed or failed result + solver state observations
+    Service->>Jobs: complete or fail job
     Service-->>Agent: ToolResponse(job)
 ```
 
 ## 设计原因
 
-HFSS 求解可能很慢，agent 不能只拿到一个阻塞式函数调用结果。模块 5 先把 job id、状态、开始时间、结束时间、失败原因和日志摘要变成稳定协议字段，让后续真实异步队列、日志采集和多用户并发控制有统一承载结构。
+HFSS 求解可能很慢，但 MCP 不能返回一个没有提交真实求解的 `running` 状态。模块 5 把 job id、状态、开始时间、结束时间、失败原因、日志摘要和后端求解状态观测变成稳定协议字段。后续如果需要真正的后台队列，应由独立 worker 提交真实 HFSS 求解并持续更新 job record，而不是在未提交求解时返回 running。
 
 同时，setup 和 sweep 被拆成两个层次：`create_simulation_setup` 仍保留默认 sweep 以兼容旧流程；`create_frequency_sweep` 用于后续更细的扫频、重扫频和优化流程。
 
@@ -166,10 +169,10 @@ HFSS 求解可能很慢，agent 不能只拿到一个阻塞式函数调用结果
 
 ## 已知限制
 
-1. 当前异步模式只创建可查询的 `running` job record，不启动独立后台求解队列。
-2. 当前 job registry 是进程内内存结构，MCP server 重启后 job record 会丢失。
-3. 真实 solver 失败后的 `hfss_messages` 已有后端采集逻辑和离线回归测试；仍需要继续补充更多真实 solver 失败样本，覆盖端口、网格、材料和 license 类错误。
-4. `connect_hfss` 会根据 configured executable 自动推导 Student 版和桌面版本；若服务器使用不同安装路径，需要确认路径中包含类似 `v252` 的 AEDT 版本目录。
+1. 当前 job registry 是进程内内存结构，MCP server 重启后 job record 会丢失。
+2. 真实 solver 失败后的 `hfss_messages` 已有后端采集逻辑和离线回归测试；仍需要继续补充更多真实 solver 失败样本，覆盖端口、网格、材料和 license 类错误。
+3. `connect_hfss` 会根据 configured executable 自动推导 Student 版和桌面版本；若服务器使用不同安装路径，需要确认路径中包含类似 `v252` 的 AEDT 版本目录。
+4. 如果某个 PyAEDT/AEDT 版本无法读取 `are_there_simulations_running` 或 `AreThereSimulationsRunning`，结果会返回 `status_api_available=false` 的状态观测；此时不能把它当作已观察到真实运行中的证据。
 
 ## 验证方法
 

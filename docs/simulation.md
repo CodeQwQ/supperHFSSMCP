@@ -217,3 +217,7 @@ validate_design
 run_simulation
 get_s_parameters / analyze_s_parameters
 ```
+
+## 2026-07-27 Reliability Update
+
+Long-running simulation behavior is documented in `docs/simulation-reliability.md`. The service now submits the real solver to a background simulation worker after the validation gate, persists job transitions, polls AEDT state without a solve deadline, returns newly observed HFSS solver errors in the job record, and blocks connection release while a solve is active.

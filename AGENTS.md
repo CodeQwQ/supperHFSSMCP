@@ -1,5 +1,9 @@
 # HFSSagent Project Notes
 
+## Real acceptance discipline
+
+For every change involving HFSS modeling, validation, simulation, result extraction, or session recovery, acceptance must include an independent sub-agent connecting to the real MCP service and real Ansys Electronics Desktop Student 2025 R2. The independent flow must execute validation before simulation, confirm that HFSS actually enters the solver, and record solver failures immediately from the simulation tool or job status rather than discovering them only during result extraction.
+
 ## 项目简介
 
 本项目目标是构建一个本地 HFSS 操作 agent MCP 服务。用户用自然语言描述 HFSS 相关任务后，agent 能理解任务意图，并利用 MCP 操作本地 Ansys HFSS 完成建模画图、参数设置、仿真运行、结果提取与后续分析。项目的核心定位不是让小模型临时编写复杂 PyAEDT/HFSS 脚本，而是把 HFSS 设计与验证能力沉淀成可发现、可组合、可校验的 MCP 能力：小模型先阅读 MCP resources 中的天线设计经验、流程模板、工具边界和验收规则，再选择并拼接受控动作积木完成设计、仿真、验证、结果分析和必要的迭代。通过这种方式，本地小模型也能完成天线设计，或自动复现论文设计并验证，而无需依赖强大大模型一次性生成完整且正确的自动化脚本。
@@ -37,4 +41,4 @@
 14. 对 HFSS/AEDT 这类闭源长会话桌面软件，不能只相信 API 返回成功。涉及 release、close、disconnect、solve 等操作时，必须用外部可观察证据验证结果，例如 AEDT PID 是否退出、工程文件锁是否释放、GUI 截图是否真实来自 HFSS 窗口、message manager 是否给出预期消息。
 15. 后续项目演进必须优先服务“小模型可用性”：MCP tool 不应退化为 PyAEDT API 的薄包装，也不应要求 agent 生成或提交任意脚本；应优先提供领域语义明确的工具、resources、prompt/workflow 模板、结构化状态摘要、下一步建议、失败诊断和 validation gate，让小模型通过选择、规划和组合完成任务。
 16. 后续新增 resource 时，应把它视为小模型的领域工作手册，而不是普通说明文档。每个 resource 应尽量包含适用场景、前置条件、推荐工具序列、关键参数含义、常见 HFSS 报错、验证标准和失败后的恢复路径。
-17. 后续每次发布 GitHub release 时，必须同步发布 Windows 离线运行包。release 不能只包含源码或说明；除非用户明确要求跳过离线包，否则需要运行离线打包脚本、验证压缩包可导入并启动 MCP 服务、把离线 zip 作为 release asset 上传，并在 release notes 中写明离线包名称、构建 commit、Python 版本和基本验证结果。
+17. 后续发布 GitHub release 时，必须区分“完整离线基线包”和“轻量可覆盖更新包”。当 Python 版本、依赖、PyAEDT/HFSS 运行环境、MCP 启动结构、部署目录结构或其他离线环境能力发生变化时，必须发布 Windows 完整离线运行包；完整包需要运行离线打包脚本、验证压缩包可导入并启动 MCP 服务、把离线 zip 作为 release asset 上传，并在 release notes 中写明离线包名称、构建 commit、Python 版本和基本验证结果。当仅包含项目代码、docs、resources、workflow、测试或非环境类修改时，可以发布轻量更新包；轻量包必须设计成“可直接解压到原项目目录覆盖”的结构，只包含需要覆盖的项目文件和更新说明，不得包含 `.venv`、离线 Python 环境、大模型文件、HFSS 工程结果、日志、缓存或本地私有配置。轻量包必须附带 `UPDATE.md` 或 `manifest.json`，写明它依赖的完整离线基线包版本、更新版本、构建 commit、是否需要重新安装依赖、是否可安全覆盖项目根目录、必须保留的路径、覆盖部署步骤、回滚/备份建议和验证命令；release notes 中也必须写明这些信息和验证结果。后续轻量包默认按照这种可覆盖更新包方式发布，服务器部署流程默认为：备份原项目目录中的代码和配置，解压轻量包到原项目目录覆盖同名文件，保留既有离线环境与本地数据，然后运行更新包声明的验证命令。

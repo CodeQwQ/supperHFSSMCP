@@ -577,14 +577,28 @@ class PyAedtBackend:
         # Hfss.analyze() saves the active project before solving. Student AEDT
         # sessions can reject that save through gRPC, while AnalyzeSetup is the
         # direct AEDT operation needed by this adapter.
-        started = analyze_setup(name=setup_name, blocking=False)
-        observations = self._wait_until_solver_idle()
+        initial_messages = self._collect_hfss_messages()
+        try:
+            started = analyze_setup(name=setup_name, blocking=False)
+        except Exception as exc:
+            details = self._error_details()
+            raise BackendUnavailableError(
+                f"HFSS solver submission failed for setup {setup_name!r}: {exc}",
+                details=details,
+            ) from exc
+        observations, solver_errors = self._wait_until_solver_idle(initial_messages)
         observed_running = any(item["running"] for item in observations)
-        if not started:
-            messages = self._collect_hfss_messages()
+        messages = solver_errors or self._collect_hfss_messages()
+        status_api_unavailable = bool(observations) and not observations[-1]["status_api_available"]
+        if not started or solver_errors or status_api_unavailable:
             failure_reason = _hfss_failure_reason(
                 messages,
-                f"HFSS solver reported failure for setup {setup_name!r}.",
+                (
+                    "HFSS simulation completion could not be proven because the "
+                    "AEDT simulation status API is unavailable."
+                    if status_api_unavailable
+                    else f"HFSS solver reported failure for setup {setup_name!r}."
+                ),
             )
             return {
                 "setup_name": setup_name,
@@ -745,19 +759,34 @@ class PyAedtBackend:
                 deduplicated.append(message)
         return deduplicated[-20:]
 
-    def _wait_until_solver_idle(self) -> list[dict[str, Any]]:
+    def _wait_until_solver_idle(
+        self,
+        initial_messages: list[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         observations: list[dict[str, Any]] = []
+        known_messages = set(initial_messages or [])
+        solver_errors: list[str] = []
         while True:
             running = self._read_simulation_running_state()
+            current_messages = self._collect_hfss_messages()
+            new_errors = _new_hfss_errors(current_messages, known_messages)
+            for message in new_errors:
+                if message not in solver_errors:
+                    solver_errors.append(message)
             observation = {
                 "check_index": len(observations) + 1,
                 "running": bool(running) if running is not None else False,
                 "status_api_available": running is not None,
                 "timestamp": time.time(),
             }
+            if new_errors:
+                observation["hfss_messages"] = new_errors
             observations.append(observation)
+            if new_errors:
+                observation["hfss_messages"] = new_errors
+            known_messages.update(current_messages)
             if running is None or not running:
-                return observations
+                return observations, solver_errors
             time.sleep(self._simulation_poll_interval_seconds)
 
     def _read_simulation_running_state(self) -> bool | None:
@@ -947,6 +976,15 @@ def _hfss_failure_reason(messages: list[str], fallback: str) -> str:
     return " | ".join(selected[-5:])
 
 
+def _new_hfss_errors(messages: list[str], known_messages: set[str]) -> list[str]:
+    return [
+        message
+        for message in messages
+        if message not in known_messages
+        and any(marker in message.lower() for marker in ("[error]", "error", "failed", "invalid"))
+    ]
+
+
 def _aedt_process_id(hfss: Any) -> int | None:
     desktop_class = getattr(hfss, "desktop_class", None)
     process_id = getattr(desktop_class, "aedt_process_id", None)
@@ -1073,16 +1111,13 @@ class _PyAedtWorkerClient:
                 self._terminate()
                 raise BackendUnavailableError("PyAEDT worker process is not reachable.") from exc
 
-            effective_timeout = (
-                _DEFAULT_WORKER_COMMAND_TIMEOUT_SECONDS
-                if timeout_seconds is None
-                else timeout_seconds
-            )
-            if not self._parent_conn.poll(effective_timeout):
+            if timeout_seconds is not None and not self._parent_conn.poll(timeout_seconds):
                 self._terminate()
                 raise SessionError(
-                    f"PyAEDT worker command '{command}' timed out after {effective_timeout:g} seconds."
+                    f"PyAEDT worker command '{command}' timed out after {timeout_seconds:g} seconds."
                 )
+            if timeout_seconds is None:
+                self._parent_conn.poll(None)
 
             try:
                 response = self._parent_conn.recv()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import shutil
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
@@ -56,7 +57,11 @@ class HfssService:
         self.config = config or ServerConfig(output_root=self.output_root)
         self.sessions = SessionManager(backend.name)
         self.project_paths = ProjectPathPolicy(self.output_root / "projects")
-        self.jobs = JobManager()
+        self.jobs = JobManager(self.output_root / "simulation_jobs.json")
+        self._simulation_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="hfss-agent-simulation",
+        )
         self.security = SecurityManager(
             self.output_root,
             audit_log_path=self.config.audit_log_path,
@@ -692,7 +697,7 @@ class HfssService:
         _require_non_empty("job_id", job_id)
         return self._call(
             "Simulation job retrieved.",
-            lambda: {"job": self.jobs.require(job_id, owner=self._owner()).to_dict()},
+            lambda: {"job": self.jobs.snapshot(job_id, owner=self._owner())},
             next_actions=["get_s_parameters", "run_simulation"],
         )
 
@@ -1048,6 +1053,12 @@ class HfssService:
         close_desktop: bool,
     ) -> dict[str, Any]:
         record = self._require_owned_session(session_id)
+        running_jobs = self.jobs.running(owner=self._owner())
+        if running_jobs:
+            raise SessionError(
+                "Cannot release the HFSS connection while a simulation is running. "
+                "Poll get_simulation_job until every job is completed or failed."
+            )
         release_result: dict[str, Any] | None = None
         if self.sessions.active_session_id == record.session_id:
             release_result = self.backend.disconnect(
@@ -1107,32 +1118,48 @@ class HfssService:
                 "validation": validation,
                 "job": failed.to_dict(),
             }
+        self._simulation_executor.submit(
+            self._complete_simulation_job,
+            job.job_id,
+            setup_name,
+            owner,
+        )
+        return {
+            "setup_name": setup_name,
+            "status": "running",
+            "validation": validation,
+            "job": self.jobs.snapshot(job.job_id, owner=owner),
+            "backend_note": (
+                "Real HFSS solver execution was submitted. Poll get_simulation_job; "
+                "the job remains attached to the MCP service if this request disconnects."
+            ),
+        }
 
+    def _complete_simulation_job(self, job_id: str, setup_name: str, owner: str | None) -> None:
         try:
             result = self.backend.run_simulation(setup_name)
         except HfssAgentError as exc:
-            self.jobs.fail(job.job_id, str(exc), owner=owner)
-            raise
+            failure = {"status": "failed", "error": str(exc), **exc.details}
+            self.jobs.fail(job_id, str(exc), owner=owner, result=failure)
+            return
+        except BaseException as exc:
+            failure = {"status": "failed", "error": str(exc)}
+            self.jobs.fail(job_id, str(exc), owner=owner, result=failure)
+            return
         if result.get("status") == "failed":
-            failed = self.jobs.fail(
-                job.job_id,
+            self.jobs.fail(
+                job_id,
                 str(result.get("failure_reason") or "Backend reported simulation failure."),
                 owner=owner,
+                result=result,
             )
-            data = dict(result)
-            data["job"] = failed.to_dict()
-            data["status"] = "failed"
-            return data
-        completed = self.jobs.complete(
-            job.job_id,
+            return
+        self.jobs.complete(
+            job_id,
             result,
             result.get("backend_note", "Backend solve finished."),
             owner=owner,
         )
-        data = dict(result)
-        data["job"] = completed.to_dict()
-        data["status"] = completed.status if result.get("status") == "completed" else result.get("status", completed.status)
-        return data
 
     def _call(
         self,

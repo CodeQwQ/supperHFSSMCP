@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from hfss_agent_mcp.backends.pyaedt import (
     PyAedtBackend,
+    _PyAedtWorkerClient,
     _execute_worker_command,
     _raise_worker_error,
     _call_release_desktop,
@@ -275,6 +276,82 @@ class PyAedtBackendTests(unittest.TestCase):
         self.assertEqual("failed", result["status"])
         self.assertIn("Port has no conductors", result["failure_reason"])
         self.assertIn("Port has no conductors", result["hfss_messages"][0])
+
+    def test_run_simulation_reports_async_solver_error_before_returning_completed(self) -> None:
+        class Logger:
+            def __init__(self) -> None:
+                self._messages = [
+                    [],
+                    ["[error] Sweep Sweep1 failed", "[error] process hf3d exited with code 259"],
+                ]
+
+            def get_messages(self, level: int = 0):
+                return self._messages.pop(0) if self._messages else self._messages[-1]
+
+        class FakeHfss:
+            project_name = "Project1"
+            design_name = "Design1"
+            logger = Logger()
+            _running = [True, True, False]
+
+            def analyze_setup(self, name: str, blocking: bool) -> bool:
+                return True
+
+            @property
+            def are_there_simulations_running(self) -> bool:
+                return self._running.pop(0)
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._simulation_poll_interval_seconds = 0.0
+        backend._hfss = FakeHfss()
+
+        result = backend.run_simulation("Setup1")
+
+        self.assertEqual("failed", result["status"])
+        self.assertEqual(3, result["simulation_status_checks"])
+        self.assertIn("Sweep Sweep1 failed", result["failure_reason"])
+        self.assertIn("hf3d exited with code 259", result["hfss_messages"][-1])
+
+    def test_run_simulation_does_not_claim_completed_without_status_api(self) -> None:
+        class FakeHfss:
+            def analyze_setup(self, name: str, blocking: bool) -> bool:
+                return True
+
+        backend = PyAedtBackend(use_process_worker=False)
+        backend._simulation_poll_interval_seconds = 0.0
+        backend._hfss = FakeHfss()
+
+        result = backend.run_simulation("Setup1")
+
+        self.assertEqual("failed", result["status"])
+        self.assertIn("completion could not be proven", result["failure_reason"])
+
+    def test_worker_call_with_none_timeout_does_not_apply_300_second_deadline(self) -> None:
+        calls: list[object] = []
+
+        class FakeConnection:
+            def send(self, request):
+                self.request = request
+
+            def poll(self, timeout=None):
+                calls.append(timeout)
+                return True
+
+            def recv(self):
+                return {"id": 0, "status": "ok", "data": {"accepted": True}}
+
+        class FakeProcess:
+            def is_alive(self):
+                return True
+
+        worker = _PyAedtWorkerClient()
+        worker._parent_conn = FakeConnection()
+        worker._process = FakeProcess()
+
+        result = worker.call("run_simulation", {"setup_name": "Setup1"}, timeout_seconds=None)
+
+        self.assertEqual({"accepted": True}, result)
+        self.assertEqual([None], calls)
 
     def test_assign_boundary_supports_perfecte_sheets(self) -> None:
         calls: list[dict] = []

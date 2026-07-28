@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -51,7 +52,14 @@ class MockServiceTests(unittest.TestCase):
         self.assertTrue(validation["data"]["valid"])
 
         run = self.service.run_simulation("Setup1")
-        self.assertEqual("completed", run["data"]["status"])
+        job_id = run["data"]["job"]["job_id"]
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            job = self.service.get_simulation_job(job_id)["data"]["job"]
+            if job["status"] == "completed":
+                break
+            time.sleep(0.01)
+        self.assertEqual("completed", self.service.get_simulation_job(job_id)["data"]["job"]["status"])
 
         s_params = self.service.get_s_parameters("Setup1")
         self.assertTrue(s_params["data"]["solved"])

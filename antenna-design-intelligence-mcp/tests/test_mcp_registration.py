@@ -35,6 +35,20 @@ class McpRegistrationTests(unittest.TestCase):
             self.assertIn("antenna://handbook/extraction-workflow", uris)
             self.assertIn("antenna://handbook/spec-fields", uris)
 
+    def test_direct_tool_and_resource_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            config = ServerConfig(input_roots=(root / "inputs",), output_root=root / "outputs")
+            app = create_app(config)
+
+            async def invoke() -> None:
+                _, payload = await app.call_tool("list_providers", {})
+                self.assertTrue(payload["success"])
+                contents = await app.read_resource("antenna://handbook/extraction-workflow")
+                self.assertIn("validate_design", str(contents))
+
+            asyncio.run(invoke())
+
 
 if __name__ == "__main__":
     unittest.main()

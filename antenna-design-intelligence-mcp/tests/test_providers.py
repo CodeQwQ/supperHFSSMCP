@@ -15,6 +15,8 @@ class ProviderTests(unittest.TestCase):
         records = ProviderRegistry(enable_verification=False, output_root=Path("outputs")).list_status()
         self.assertEqual(records[0]["provider_id"], "verification_evidence")
         self.assertEqual(records[0]["health"], "unavailable")
+        self.assertEqual(records[0]["provider_kind"], "verification")
+        self.assertEqual(records[0]["capabilities"], ["manual_evidence"])
 
     def test_enabled_verification_provider_rejects_missing_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

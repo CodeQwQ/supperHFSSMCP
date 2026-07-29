@@ -14,6 +14,8 @@ class ProviderRegistry:
             "verification_evidence": ProviderStatus(
                 provider_id="verification_evidence",
                 provider_version="0.1.0",
+                provider_kind="verification",
+                capabilities=["manual_evidence"],
                 health=ProviderHealth.UNAVAILABLE,
                 message="首版未配置 OCR/VLM；仅启用开发/测试验证 provider 后可读取人工证据。",
             )

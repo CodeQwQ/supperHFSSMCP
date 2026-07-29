@@ -14,3 +14,6 @@ antenna-design-intelligence-mcp = "antenna_design_intelligence_mcp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+antenna_design_intelligence_mcp = ["resources/*.md"]

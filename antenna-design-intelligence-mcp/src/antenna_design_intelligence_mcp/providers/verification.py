@@ -23,6 +23,8 @@ class VerificationEvidenceProvider:
         return ProviderStatus(
             provider_id=self.provider_id,
             provider_version=self.provider_version,
+            provider_kind="verification",
+            capabilities=["manual_evidence"],
             health=ProviderHealth.AVAILABLE,
             message="仅用于开发/测试的人工核对证据，不执行 OCR 或视觉推理。",
         )

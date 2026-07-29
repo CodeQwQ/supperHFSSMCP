@@ -37,6 +37,8 @@ class ProviderStatus(BaseModel):
 
     provider_id: str
     provider_version: str
+    provider_kind: Literal["document", "ocr", "vision", "verification"]
+    capabilities: list[str] = Field(default_factory=list)
     health: ProviderHealth
     message: str
 

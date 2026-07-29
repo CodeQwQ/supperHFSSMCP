@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class DomainError(Exception):
+class DomainError(ValueError):
     """可安全返回给 MCP client 的领域错误。"""
 
     code: str

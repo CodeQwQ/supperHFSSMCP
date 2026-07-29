@@ -4,7 +4,10 @@ import unittest
 
 from antenna_design_intelligence_mcp.artifacts import ArtifactStore
 
-from tests.helpers import temp_workspace
+try:
+    from .helpers import temp_workspace
+except ImportError:  # unittest discover -s tests imports modules as top-level
+    from helpers import temp_workspace
 
 
 class ArtifactTests(unittest.TestCase):

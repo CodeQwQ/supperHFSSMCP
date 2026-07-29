@@ -24,5 +24,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("inspect_input", completed.stdout.splitlines())
 
 
+class DeploymentDocumentTests(unittest.TestCase):
+    def test_deployment_guide_declares_no_bundled_model(self) -> None:
+        guide = (ROOT / "docs" / "部署指南.md").read_text(encoding="utf-8")
+        self.assertIn("首版不包含 OCR/VLM 模型", guide)
+        self.assertIn("ANTENNA_INTELLIGENCE_ENABLE_VERIFICATION_PROVIDER", guide)
+
+
 if __name__ == "__main__":
     unittest.main()

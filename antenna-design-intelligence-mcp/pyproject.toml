@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "antenna-design-intelligence-mcp"
+version = "0.1.0"
+description = "Offline-first evidence extraction MCP for antenna design."
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.20,<2", "pydantic>=2,<3"]
+
+[project.scripts]
+antenna-design-intelligence-mcp = "antenna_design_intelligence_mcp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

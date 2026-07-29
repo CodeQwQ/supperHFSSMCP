@@ -28,6 +28,8 @@ flowchart LR
 
 核心包不得强制依赖任何特定 VLM、GPU 推理框架或模型文件。Provider 由配置选择，并报告可用性与能力元数据。可选 provider 缺失时，只能降低提取质量，不能阻止 MCP 服务启动。
 
+第一阶段不下载、不打包或内置 OCR/VLM。生产配置中的视觉类 provider 必须明确显示为“未配置”，不得把测试能力宣传为可部署的识图能力。
+
 ## Provider 合约
 
 每个 provider 都实现窄而明确的强类型合约，并返回标准化记录：
@@ -35,6 +37,7 @@ flowchart LR
 - `DocumentProvider`：将本地 PDF 转为页面、阅读顺序文本、表格、图注和来源位置。
 - `OcrProvider`：将本地图像或渲染页面转为识别文本和文本框坐标。
 - `VisionProvider`：接收图像与 schema 驱动的请求，输出几何线索、图中关系与视觉标签。该 provider 是可选能力，在确定部署模型与运行时后再实现。
+- `VerificationEvidenceProvider`：仅限开发/测试配置。它读取受控、人工核对的结构化证据，不进行 OCR 或视觉推理，用于验证 provider 编排、证据溯源、规格校验和向 HFSS MCP 的交接。
 
 所有 provider 输出均包含 provider 标识、版本、输入摘要、诊断信息和来源引用。核心层绝不接受 MCP client 提交的任意脚本、URL 或模型名称。
 
@@ -79,17 +82,20 @@ Resources 应作为小模型的工作手册，描述提取流程、字段定义�
 
 未来启用的模型和运行时包应在联网构建机上预置，再作为独立 Windows 离线完整包发布，不能提交到 Git。轻量更新包只能包含源代码、配置模板、文档和 manifest 数据，不能包含模型、缓存、虚拟环境、用户论文、HFSS 工程、结果或日志。
 
+项目交付时必须提供中文部署指南：说明 provider 配置方式、模型文件应放置的位置、模型摘要校验、离线安装步骤、启用/禁用 provider 的配置、健康检查命令、典型输入与回滚方式。该指南在模型选型前只给出通用 provider 部署框架；待用户选定模型后再补充对应的下载、转换和离线嵌入步骤。
+
 ## 验证策略
 
 离线自动化测试应覆盖：路径约束、类型/大小限制、provider 注册和不可用行为、证据/schema 校验、矛盾数值、单位保留、产物隔离及 MCP tool 注册。测试 fixture 只能包含合成论文和合成图像。
 
 端到端验收的主基准使用用户提供的外部本地论文：`E:\陈威-毕设\代码\天线拓扑优化\docs\相关论文\Machine-Learning-Assisted_Optimization_for_Antenna_Geometry_Design.pdf` 的场景三（论文 Section V.C，*Mutual Coupling Reduction Design*）。该场景为双单元 MIMO 的顶部/地板双层去耦结构设计，论文明确给出 5.725–5.825 GHz 工作带宽、`εr = 4.6`、`tanδ = 0.001`、两天线中心距 12.9 mm，以及去耦结构与贴片长度等需要图文联合理解的内容。
 
-验收流程为：检查该外部只读输入、提取正文和图证据、生成规格，并至少保留一个未解决字段；随后由独立本地 agent 仅使用 `confirmed` 字段调用真实 HFSS MCP。该 agent 必须在任何求解前运行 `validate_design`，确认 solver 实际进入，保留原始 HFSS validation/solver 诊断，并验证选定的资源释放语义。论文原文件不得复制到项目、测试 fixture、Git 历史或发布包中；项目只保存输入摘要、结构化证据引用和脱敏的验收记录。信息理解 MCP 本身的验收不要求 HFSS 运行时；组合后的论文复现工作流则必须在真实 HFSS 中验收。
+验收流程为：检查该外部只读输入；在当前开发环境中，使用 agent 可用的文档/图像分析工具生成候选证据，并由人工核对后以 `VerificationEvidenceProvider` 载入；生成规格时至少保留一个未解决字段；随后由独立本地 agent 仅使用 `confirmed` 字段调用真实 HFSS MCP。该 agent 必须在任何求解前运行 `validate_design`，确认 solver 实际进入，保留原始 HFSS validation/solver 诊断，并验证选定的资源释放语义。此验收证明 MCP 的编排、溯源和 HFSS 交接，不证明离线 OCR/VLM 的推理准确率。论文原文件不得复制到项目、测试 fixture、Git 历史或发布包中；项目只保存输入摘要、结构化证据引用和脱敏的验收记录。信息理解 MCP 本身的验收不要求 HFSS 运行时；组合后的论文复现工作流则必须在真实 HFSS 中验收。
 
 ## 第一阶段非目标
 
 - 选择、打包、下载或评测 VLM；
+- 在首版中交付 OCR/VLM 权重或宣称具备可部署的视觉推理能力；
 - 根据单张图精确重建三维 CAD；
 - 自动调用 HFSS tools 或绕过 `validate_design`；
 - 将 OCR/VLM 输出视为无须溯源的事实；

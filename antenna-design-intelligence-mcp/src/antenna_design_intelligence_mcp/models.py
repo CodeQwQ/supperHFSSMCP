@@ -26,6 +26,21 @@ class ProviderHealth(str, Enum):
     DEGRADED = "degraded"
 
 
+class ExtractionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_digest: str = Field(min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
+
+
+class ProviderStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider_id: str
+    provider_version: str
+    health: ProviderHealth
+    message: str
+
+
 class SourceRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

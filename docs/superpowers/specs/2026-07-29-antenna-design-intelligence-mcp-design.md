@@ -1,152 +1,94 @@
-# Antenna Design Intelligence MCP Design
+# 天线设计信息理解 MCP 设计
 
-## Goal
+## 目标
 
-Build a standalone, offline-first MCP service that turns local antenna papers and
-screenshots into an evidence-backed antenna design specification.  A local agent
-uses that specification together with the existing `hfss-agent-mcp` resources and
-tools to plan modelling and simulation.  This service never opens, controls, or
-simulates HFSS.
+构建一个独立、离线优先的 MCP 服务：将本地天线论文和截图转换为带证据链的天线设计规格。本地 agent 再结合现有 `hfss-agent-mcp` 的 resources 和 tools，自主规划建模与仿真。本服务绝不打开、控制或仿真 HFSS。
 
-## Scope and boundaries
+## 范围与边界
 
-Inputs are local PDF files and local image files.  The service extracts text,
-tables, figure captions, design parameters, and visible geometry cues into a
-strict schema.  It reports missing information explicitly rather than inventing
-dimensions or port definitions.
+输入为本地 PDF 文件和本地图像文件。服务提取正文、表格、图注、设计参数与可见几何线索，并生成严格的结构化 schema。信息不足时必须显式报告，不能虚构尺寸或端口定义。
 
-The service owns file validation, document/image processing orchestration,
-evidence capture, schema validation, and domain-level extraction prompts.  It
-does not own HFSS sessions, PyAEDT, geometry creation, simulation setup, design
-validation, solver control, or result interpretation.  Those remain in
-`hfss-agent-mcp`.
+本服务负责文件校验、文档/图像处理编排、证据留存、schema 校验及天线领域提取提示词；不负责 HFSS session、PyAEDT、几何创建、仿真 setup、设计校验、求解器控制或结果解释。这些职责继续由 `hfss-agent-mcp` 承担。
 
-## Architecture
+## 架构
 
 ```mermaid
 flowchart LR
-    Input[Local PDF or image] --> Service[Antenna design intelligence MCP]
-    Service --> Providers[Provider registry]
-    Providers --> Pdf[PDF and layout provider]
-    Providers --> Ocr[OCR provider]
-    Providers --> Vision[Optional visual understanding provider]
-    Service --> Spec[Evidence-backed AntennaDesignSpec]
-    Spec --> Agent[Local agent planning]
-    Agent --> Hfss[Existing HFSS MCP]
+    Input[本地 PDF 或图像] --> Service[天线设计信息理解 MCP]
+    Service --> Providers[Provider 注册表]
+    Providers --> Pdf[PDF 与版面 Provider]
+    Providers --> Ocr[OCR Provider]
+    Providers --> Vision[可选视觉理解 Provider]
+    Service --> Spec[带证据的 AntennaDesignSpec]
+    Spec --> Agent[本地 Agent 规划]
+    Agent --> Hfss[现有 HFSS MCP]
     Hfss --> Gate[validate_design]
-    Gate --> Solve[solve and read results]
+    Gate --> Solve[求解与结果读取]
 ```
 
-The core package must have no mandatory dependency on a specific VLM, GPU runtime,
-or model file.  Providers are selected by configuration and report availability
-and capability metadata.  A missing optional provider degrades extraction quality
-but must not prevent the MCP server from starting.
+核心包不得强制依赖任何特定 VLM、GPU 推理框架或模型文件。Provider 由配置选择，并报告可用性与能力元数据。可选 provider 缺失时，只能降低提取质量，不能阻止 MCP 服务启动。
 
-## Provider contract
+## Provider 合约
 
-Each provider implements a narrow, typed contract and returns normalized records:
+每个 provider 都实现窄而明确的强类型合约，并返回标准化记录：
 
-- `DocumentProvider`: local PDF to pages, reading-order text, tables, captions,
-  and source locations.
-- `OcrProvider`: local image or rendered page to recognized text and bounding
-  boxes.
-- `VisionProvider`: image plus a schema-directed request to geometry cues,
-  diagram relationships, and visual labels.  This provider is optional and will
-  be added after the deployment model/runtime is selected.
+- `DocumentProvider`：将本地 PDF 转为页面、阅读顺序文本、表格、图注和来源位置。
+- `OcrProvider`：将本地图像或渲染页面转为识别文本和文本框坐标。
+- `VisionProvider`：接收图像与 schema 驱动的请求，输出几何线索、图中关系与视觉标签。该 provider 是可选能力，在确定部署模型与运行时后再实现。
 
-Provider outputs include provider identifier, version, input digest, diagnostics,
-and source references.  The core layer never accepts arbitrary scripts, URLs, or
-model names from an MCP client.
+所有 provider 输出均包含 provider 标识、版本、输入摘要、诊断信息和来源引用。核心层绝不接受 MCP client 提交的任意脚本、URL 或模型名称。
 
-## Canonical output
+## 标准输出
 
-`AntennaDesignSpec` is the sole boundary exposed to a planning agent.  It contains:
+`AntennaDesignSpec` 是暴露给规划 agent 的唯一边界，包含：
 
-- antenna family and topology;
-- target bands and performance targets;
-- substrate, conductor, and dielectric information;
-- named dimensions with value, unit, tolerance/status, and semantic role;
-- feeding, port, boundary, and radiation-region facts when evidenced;
-- geometry relationships extracted from figures;
-- source evidence for every assertion: input file identity, page/image, region,
-  quoted OCR/text or visual observation, confidence, and extraction provider;
-- contradictions, unresolved fields, and questions that must be answered before
-  HFSS modelling.
+- 天线类别与拓扑；
+- 目标频段和性能指标；
+- 基板、导体和介质信息；
+- 已命名尺寸：数值、单位、状态/误差和语义角色；
+- 有证据支持时的馈电、端口、边界和辐射区域事实；
+- 从图中提取的几何关系；
+- 每项结论的来源证据：输入文件标识、页码/图像、区域、原文/OCR 内容或视觉观察、置信度和提取 provider；
+- 冲突项、未解决字段以及 HFSS 建模前必须补充的问题。
 
-Values have one of `confirmed`, `inferred`, `conflicting`, or `unknown` status.
-Only `confirmed` values may be treated as direct reproduction inputs.  Inferred
-values are usable only after the local agent records an engineering assumption;
-unknown values are never silently defaulted.
+每个值都具有 `confirmed`、`inferred`、`conflicting` 或 `unknown` 状态。只有 `confirmed` 可以直接作为论文复现输入；`inferred` 只有在本地 agent 显式记录工程假设后才能使用；`unknown` 永远不能被静默填默认值。
 
-## MCP surface
+## MCP 接口
 
-The initial server exposes read-oriented tools only:
+第一阶段只提供读取和提取类 tools：
 
-- `inspect_input`: validate a local file within configured allowed roots and
-  return content type, digest, page/image count, and available providers.
-- `extract_document_evidence`: run available document/OCR providers and persist a
-  structured extraction artifact in the managed output directory.
-- `extract_antenna_design_spec`: combine selected evidence into a schema-validated
-  `AntennaDesignSpec`, including gaps and contradictions.
-- `get_extraction_artifact`: read a managed artifact by opaque identifier.
-- `list_providers`: report enabled providers, versions, capabilities, and health.
+- `inspect_input`：校验配置允许根目录中的本地文件，返回内容类型、摘要、页/图数量和可用 providers。
+- `extract_document_evidence`：运行可用的文档/OCR providers，并在受控输出目录中保存结构化提取产物。
+- `extract_antenna_design_spec`：合并指定证据，生成经过 schema 校验的 `AntennaDesignSpec`，同时返回缺口与冲突。
+- `get_extraction_artifact`：使用不透明 ID 读取受控产物。
+- `list_providers`：返回启用的 providers、版本、能力和健康状态。
 
-Resources act as a handbook for small models: extraction workflow, field
-definitions, evidence requirements, known limitations, and the hand-off protocol
-to the HFSS MCP validation gate.
+Resources 应作为小模型的工作手册，描述提取流程、字段定义、证据要求、已知限制，以及交接至 HFSS MCP `validate_design` 门禁的协议。
 
-## Reuse assessment
+## 开源复用调研结论
 
-The default PDF/layout adapter will target [Docling](https://github.com/docling-project/docling),
-whose code is MIT licensed and whose documentation explicitly supports local,
-air-gapped execution, PDF layout/OCR/table processing, and JSON/Markdown export.
-The adapter is optional so the core does not acquire its large runtime until an
-offline package is assembled.
+默认 PDF/版面 adapter 的目标是 [Docling](https://github.com/docling-project/docling)。其代码为 MIT 许可证，文档明确支持本地隔离环境运行、PDF 版面/OCR/表格处理和 JSON/Markdown 输出。该 adapter 必须是可选依赖，直到制作离线包时才引入其较大的运行时。
 
-An optional OCR adapter can use [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
-with explicitly pre-staged local model directories; its documented ONNX Runtime
-engine offers a practical small-runtime option.  An optional advanced parser can
-use [MinerU](https://github.com/opendatalab/MinerU), which accepts local PDF/image/
-Office inputs and produces Markdown/JSON, but it must remain optional because its
-current license is a custom MinerU Open Source License based on Apache 2.0 and its
-deployment footprint is larger.
+可选 OCR adapter 可以使用 [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)，并且必须配置为使用预置的本地模型目录；其已文档化的 ONNX Runtime engine 是较轻量的运行时选项。可选的高级解析 adapter 可以使用 [MinerU](https://github.com/opendatalab/MinerU)，它支持本地 PDF、图像和 Office 输入并输出 Markdown/JSON；但它必须保持可选，因为目前使用的是基于 Apache 2.0 的 MinerU 自定义开源许可证，且部署体积更大。
 
-Future `VisionProvider` implementations may call a local OpenAI-compatible VLM
-endpoint.  [llama.cpp](https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md)
-is one candidate because it can serve local multimodal models through an
-OpenAI-compatible endpoint, but its multimodal support is documented as
-experimental.  The chosen model/runtime is deliberately deferred; no model files
-or model-specific dependency belong in the first implementation.
+未来 `VisionProvider` 可以调用本地 OpenAI 兼容的 VLM endpoint。[llama.cpp](https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md) 是一个候选运行时，因为它可通过 OpenAI 兼容 endpoint 服务本地多模态模型；但其多模态支持仍在文档中标为 experimental。模型与运行时的选型刻意延后，第一阶段不得加入模型文件或模型专属依赖。
 
-## File safety and offline deployment
+## 文件安全与离线部署
 
-Inputs must be resolved beneath configured read-only input roots.  Artifacts must
-be created only beneath a configured output root and referred to by opaque IDs.
-The service never downloads models at runtime.  Model/runtime packages, if later
-enabled, are staged on a connected build machine and released separately from Git
-as an offline Windows bundle.  A light update package contains only source,
-configuration templates, documentation, and manifest data; it contains no model,
-cache, virtual environment, user paper, HFSS project, result, or log.
+输入路径必须解析并限制在配置的只读输入根目录下。产物只能写入配置的输出根目录，MCP client 通过不透明 ID 引用它们。服务运行时不得下载模型。
 
-## Validation strategy
+未来启用的模型和运行时包应在联网构建机上预置，再作为独立 Windows 离线完整包发布，不能提交到 Git。轻量更新包只能包含源代码、配置模板、文档和 manifest 数据，不能包含模型、缓存、虚拟环境、用户论文、HFSS 工程、结果或日志。
 
-Offline automated tests cover path containment, type/size limits, provider
-registration and unavailable-provider behavior, evidence/schema validation,
-contradictory values, unit preservation, artifact isolation, and MCP tool
-registration.  Fixtures contain synthetic papers and images only.
+## 验证策略
 
-End-to-end acceptance uses a sample antenna paper and its figure: inspect input,
-extract evidence, generate a specification with at least one unresolved field,
-and have a separate local agent use only confirmed fields to call the real HFSS
-MCP.  That agent must execute `validate_design` before any solve, confirm solver
-entry, retain raw HFSS validation/solver diagnostics, and verify the selected
-resource-release semantics.  The intelligence MCP itself is accepted without
-requiring an HFSS runtime; the composed reproduction workflow is not.
+离线自动化测试应覆盖：路径约束、类型/大小限制、provider 注册和不可用行为、证据/schema 校验、矛盾数值、单位保留、产物隔离及 MCP tool 注册。测试 fixture 只能包含合成论文和合成图像。
 
-## Non-goals for the first increment
+端到端验收使用一篇样例天线论文及其插图：检查输入、提取证据、生成至少含一个未解决字段的规格，并由独立本地 agent 仅使用 `confirmed` 字段调用真实 HFSS MCP。该 agent 必须在任何求解前运行 `validate_design`，确认 solver 实际进入，保留原始 HFSS validation/solver 诊断，并验证选定的资源释放语义。信息理解 MCP 本身的验收不要求 HFSS 运行时；组合后的论文复现工作流则必须在真实 HFSS 中验收。
 
-- Selecting, packaging, downloading, or benchmarking a VLM.
-- Reconstructing exact 3D CAD from a single figure.
-- Automatically calling HFSS tools or bypassing `validate_design`.
-- Treating OCR/VLM output as ground truth without provenance.
-- Remote URLs, cloud inference, or arbitrary code execution.
+## 第一阶段非目标
+
+- 选择、打包、下载或评测 VLM；
+- 根据单张图精确重建三维 CAD；
+- 自动调用 HFSS tools 或绕过 `validate_design`；
+- 将 OCR/VLM 输出视为无须溯源的事实；
+- 支持远程 URL、云端推理或任意代码执行。

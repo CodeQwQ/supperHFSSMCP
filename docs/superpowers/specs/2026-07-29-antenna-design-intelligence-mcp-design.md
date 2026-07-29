@@ -83,7 +83,9 @@ Resources 应作为小模型的工作手册，描述提取流程、字段定义�
 
 离线自动化测试应覆盖：路径约束、类型/大小限制、provider 注册和不可用行为、证据/schema 校验、矛盾数值、单位保留、产物隔离及 MCP tool 注册。测试 fixture 只能包含合成论文和合成图像。
 
-端到端验收使用一篇样例天线论文及其插图：检查输入、提取证据、生成至少含一个未解决字段的规格，并由独立本地 agent 仅使用 `confirmed` 字段调用真实 HFSS MCP。该 agent 必须在任何求解前运行 `validate_design`，确认 solver 实际进入，保留原始 HFSS validation/solver 诊断，并验证选定的资源释放语义。信息理解 MCP 本身的验收不要求 HFSS 运行时；组合后的论文复现工作流则必须在真实 HFSS 中验收。
+端到端验收的主基准使用用户提供的外部本地论文：`E:\陈威-毕设\代码\天线拓扑优化\docs\相关论文\Machine-Learning-Assisted_Optimization_for_Antenna_Geometry_Design.pdf` 的场景三（论文 Section V.C，*Mutual Coupling Reduction Design*）。该场景为双单元 MIMO 的顶部/地板双层去耦结构设计，论文明确给出 5.725–5.825 GHz 工作带宽、`εr = 4.6`、`tanδ = 0.001`、两天线中心距 12.9 mm，以及去耦结构与贴片长度等需要图文联合理解的内容。
+
+验收流程为：检查该外部只读输入、提取正文和图证据、生成规格，并至少保留一个未解决字段；随后由独立本地 agent 仅使用 `confirmed` 字段调用真实 HFSS MCP。该 agent 必须在任何求解前运行 `validate_design`，确认 solver 实际进入，保留原始 HFSS validation/solver 诊断，并验证选定的资源释放语义。论文原文件不得复制到项目、测试 fixture、Git 历史或发布包中；项目只保存输入摘要、结构化证据引用和脱敏的验收记录。信息理解 MCP 本身的验收不要求 HFSS 运行时；组合后的论文复现工作流则必须在真实 HFSS 中验收。
 
 ## 第一阶段非目标
 

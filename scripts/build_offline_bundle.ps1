@@ -100,7 +100,7 @@ $DocFiles = @(
     "modeling.md",
     "optimization.md",
     "offline-deployment.md",
-    "双MCP离线部署.md"
+    "dual-mcp-offline-deployment.md"
 )
 foreach ($doc in $DocFiles) {
     $source = Join-Path (Join-Path $RepoRoot "docs") $doc

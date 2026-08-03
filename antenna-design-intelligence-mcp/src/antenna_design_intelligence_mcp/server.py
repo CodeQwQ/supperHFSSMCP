@@ -34,6 +34,9 @@ def create_app(config: ServerConfig | None = None) -> FastMCP:
         providers=ProviderRegistry(
             enable_verification=resolved.enable_verification_provider,
             output_root=resolved.output_root,
+            perception_endpoint=resolved.perception_endpoint,
+            perception_timeout_seconds=resolved.perception_timeout_seconds,
+            perception_api_key=resolved.perception_api_key,
         ),
     )
     register_all_tools(app, service)

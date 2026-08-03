@@ -9,6 +9,7 @@ from antenna_design_intelligence_mcp.models import (
     DimensionFact,
     EvidenceItem,
     EvidenceKind,
+    ExtractionRequest,
     FactStatus,
     SourceRef,
 )
@@ -31,6 +32,14 @@ def evidence() -> EvidenceItem:
 
 
 class ModelTests(unittest.TestCase):
+    def test_extraction_request_accepts_transport_payload_metadata(self) -> None:
+        request = ExtractionRequest(
+            input_digest="a" * 64,
+            input_suffix=".pdf",
+            content_base64="cGF5bG9hZA==",
+        )
+        self.assertEqual(request.input_suffix, ".pdf")
+        self.assertEqual(request.content_base64, "cGF5bG9hZA==")
     def test_confirmed_dimension_requires_value_and_unit(self) -> None:
         with self.assertRaises(ValidationError):
             DimensionFact(

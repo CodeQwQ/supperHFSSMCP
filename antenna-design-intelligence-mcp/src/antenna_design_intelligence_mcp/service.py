@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import re
 from pathlib import Path
 
@@ -32,6 +33,7 @@ class IntelligenceService:
         self.path_policy = path_policy
         self.artifacts = artifacts
         self.providers = providers
+        self._input_paths: dict[str, Path] = {}
 
     def inspect_input(self, path: str) -> dict[str, object]:
         try:
@@ -39,6 +41,7 @@ class IntelligenceService:
         except FileNotFoundError as exc:
             raise DomainError("input_not_found", "输入文件不存在。", {"path": path}) from exc
         digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        self._input_paths[digest] = resolved
         artifact_id = self.artifacts.write(
             "input",
             {
@@ -71,7 +74,21 @@ class IntelligenceService:
         diagnostics: list[dict[str, object]] = []
         for provider in providers:
             try:
-                records.extend(provider.extract(ExtractionRequest(input_digest=input_id)))
+                request = ExtractionRequest(input_digest=input_id)
+                if getattr(provider, "requires_content", False):
+                    input_path = self._input_paths.get(input_id)
+                    if input_path is None:
+                        raise DomainError(
+                            "input_not_inspected",
+                            "当前服务实例未检查该输入文件，请先调用 inspect_input。",
+                            {"input_id": input_id},
+                        )
+                    request = ExtractionRequest(
+                        input_digest=input_id,
+                        input_suffix=input_path.suffix.lower(),
+                        content_base64=base64.b64encode(input_path.read_bytes()).decode("ascii"),
+                    )
+                records.extend(provider.extract(request))
             except DomainError as error:
                 diagnostics.append(error.to_payload()["error"])
         if not records:

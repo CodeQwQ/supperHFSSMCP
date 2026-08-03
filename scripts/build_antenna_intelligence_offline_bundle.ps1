@@ -68,6 +68,11 @@ $env:ANTENNA_INTELLIGENCE_INPUT_ROOTS = "$PSScriptRoot\data\inputs"
 $env:ANTENNA_INTELLIGENCE_OUTPUT_ROOT = "$PSScriptRoot\data\outputs"
 $env:ANTENNA_INTELLIGENCE_ENABLE_VERIFICATION_PROVIDER = "false"
 $env:ANTENNA_INTELLIGENCE_MAX_INPUT_BYTES = "52428800"
+
+# Optional model-independent OCR/VLM HTTP sidecar.
+# $env:ANTENNA_INTELLIGENCE_PERCEPTION_ENDPOINT = "http://127.0.0.1:8020/extract"
+# $env:ANTENNA_INTELLIGENCE_PERCEPTION_TIMEOUT_SECONDS = "120"
+# $env:ANTENNA_INTELLIGENCE_PERCEPTION_API_KEY = "replace-me"
 '@
 Set-Content -LiteralPath (Join-Path $BundleRoot "config.example.ps1") -Value $Config -Encoding UTF8
 

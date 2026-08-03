@@ -15,6 +15,9 @@ class ServerConfig:
     output_root: Path = Path("outputs")
     enable_verification_provider: bool = False
     max_input_bytes: int = 50 * 1024 * 1024
+    perception_endpoint: str | None = None
+    perception_timeout_seconds: float = 120.0
+    perception_api_key: str | None = None
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -33,4 +36,12 @@ class ServerConfig:
             max_input_bytes=int(
                 os.getenv("ANTENNA_INTELLIGENCE_MAX_INPUT_BYTES", str(cls.max_input_bytes))
             ),
+            perception_endpoint=os.getenv("ANTENNA_INTELLIGENCE_PERCEPTION_ENDPOINT") or None,
+            perception_timeout_seconds=float(
+                os.getenv(
+                    "ANTENNA_INTELLIGENCE_PERCEPTION_TIMEOUT_SECONDS",
+                    str(cls.perception_timeout_seconds),
+                )
+            ),
+            perception_api_key=os.getenv("ANTENNA_INTELLIGENCE_PERCEPTION_API_KEY") or None,
         )

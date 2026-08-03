@@ -54,3 +54,44 @@ Agent 先调用天线设计信息 MCP 获取带证据的 `AntennaDesignSpec`，�
 ## 当前限制
 
 首版不包含 OCR/VLM 模型。`list_providers` 会显示视觉 Provider 未配置；后续模型应作为可插拔 Provider 单独安装，不需要重新部署 HFSS MCP。
+
+## 接入 OCR/VLM sidecar
+
+OCR/VLM 不需要安装到 MCP 的 Python 环境中。模型可以运行在独立 Python 环境、容器或另一台机器上，只要提供版本化 HTTP/JSON 接口即可。MCP 通过请求体传输文件摘要、扩展名和 Base64 文件内容，不依赖 sidecar 的本地路径。
+
+在 `config.ps1` 中配置：
+
+```powershell
+$env:ANTENNA_INTELLIGENCE_PERCEPTION_ENDPOINT = "http://127.0.0.1:8020/extract"
+$env:ANTENNA_INTELLIGENCE_PERCEPTION_TIMEOUT_SECONDS = "120"
+# 可选：与 sidecar 约定的 Bearer token
+# $env:ANTENNA_INTELLIGENCE_PERCEPTION_API_KEY = "your-token"
+```
+
+重启 MCP 后调用 `list_providers`，应看到 `http_perception` 为 `available`。MCP 本身不会导入 PyTorch、CUDA、OCR 或 VLM SDK。
+
+### sidecar 请求协议
+
+```json
+{
+  "protocol_version": "1",
+  "input_digest": "64位小写SHA-256",
+  "input_suffix": ".pdf",
+  "content_base64": "..."
+}
+```
+
+sidecar 返回：
+
+```json
+{
+  "protocol_version": "1",
+  "provider_id": "your-ocr-vlm-provider",
+  "provider_version": "1.0.0",
+  "evidence": []
+}
+```
+
+`evidence` 中的每一项必须符合 `EvidenceItem` 结构，并且 `source.input_id` 必须等于请求中的 `input_digest`。模型版本、置信度、页码和图像区域应写入证据，不能只返回最终尺寸。
+
+sidecar 建议只监听 `127.0.0.1:8020`；如果部署在另一台机器，应增加 TLS 或网络隔离，并使用 API key。模型文件、CUDA runtime 和 sidecar 依赖应作为独立离线包部署，不能让 MCP 运行时联网下载。

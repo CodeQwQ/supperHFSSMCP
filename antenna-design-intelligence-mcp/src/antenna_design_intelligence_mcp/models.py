@@ -30,6 +30,8 @@ class ExtractionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input_digest: str = Field(min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
+    input_suffix: str | None = Field(default=None, pattern=r"^\.(pdf|png|jpg|jpeg)$")
+    content_base64: str | None = Field(default=None, min_length=1)
 
 
 class ProviderStatus(BaseModel):

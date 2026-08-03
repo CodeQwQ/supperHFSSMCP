@@ -4,11 +4,19 @@ from pathlib import Path
 
 from antenna_design_intelligence_mcp.models import ProviderHealth, ProviderStatus
 from antenna_design_intelligence_mcp.providers.base import EvidenceProvider
+from antenna_design_intelligence_mcp.providers.http import HTTPPerceptionProvider
 from antenna_design_intelligence_mcp.providers.verification import VerificationEvidenceProvider
 
 
 class ProviderRegistry:
-    def __init__(self, enable_verification: bool, output_root: Path) -> None:
+    def __init__(
+        self,
+        enable_verification: bool,
+        output_root: Path,
+        perception_endpoint: str | None = None,
+        perception_timeout_seconds: float = 120.0,
+        perception_api_key: str | None = None,
+    ) -> None:
         self._providers: dict[str, EvidenceProvider] = {}
         self._statuses: dict[str, ProviderStatus] = {
             "verification_evidence": ProviderStatus(
@@ -22,6 +30,14 @@ class ProviderRegistry:
         }
         if enable_verification:
             self.register(VerificationEvidenceProvider(output_root))
+        if perception_endpoint:
+            self.register(
+                HTTPPerceptionProvider(
+                    endpoint=perception_endpoint,
+                    timeout_seconds=perception_timeout_seconds,
+                    api_key=perception_api_key,
+                )
+            )
 
     def register(self, provider: EvidenceProvider) -> None:
         if provider.provider_id in self._providers:

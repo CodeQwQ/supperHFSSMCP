@@ -34,11 +34,12 @@ if (-not (Test-Path -LiteralPath $VenvSitePackages)) { throw "site-packages not 
 $BundleRoot = Join-Path $OutputRoot $BundleName
 $RuntimeRoot = Join-Path $BundleRoot "python"
 $AppRoot = Join-Path $BundleRoot "app"
+$PerceptionAppRoot = Join-Path $AppRoot "perception"
 $DocsRoot = Join-Path $BundleRoot "docs"
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 Assert-ChildPath $OutputRoot $BundleRoot
 if (Test-Path -LiteralPath $BundleRoot) { Remove-Item -LiteralPath $BundleRoot -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $BundleRoot, $AppRoot, $DocsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $BundleRoot, $AppRoot, $PerceptionAppRoot, $DocsRoot | Out-Null
 
 Write-Host "Copying portable Python runtime"
 Copy-Item -LiteralPath $PythonBase -Destination $RuntimeRoot -Recurse -Force
@@ -51,6 +52,10 @@ $SourceRoot = Join-Path $RepoRoot "antenna-design-intelligence-mcp"
 Copy-Item -LiteralPath (Join-Path $SourceRoot "src") -Destination (Join-Path $AppRoot "src") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $SourceRoot "pyproject.toml") -Destination $AppRoot -Force
 Copy-Item -LiteralPath (Join-Path $SourceRoot "README.md") -Destination $AppRoot -Force
+$PerceptionRoot = Join-Path $RepoRoot "perception-sidecar"
+Copy-Item -LiteralPath (Join-Path $PerceptionRoot "src") -Destination (Join-Path $PerceptionAppRoot "src") -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $PerceptionRoot "pyproject.toml") -Destination $PerceptionAppRoot -Force
+Copy-Item -LiteralPath (Join-Path $PerceptionRoot "README.md") -Destination $PerceptionAppRoot -Force
 
 $DocFiles = @("antenna-intelligence-offline-deployment.md")
 foreach ($doc in $DocFiles) {
@@ -69,10 +74,17 @@ $env:ANTENNA_INTELLIGENCE_OUTPUT_ROOT = "$PSScriptRoot\data\outputs"
 $env:ANTENNA_INTELLIGENCE_ENABLE_VERIFICATION_PROVIDER = "false"
 $env:ANTENNA_INTELLIGENCE_MAX_INPUT_BYTES = "52428800"
 
-# Optional model-independent OCR/VLM HTTP sidecar.
-# $env:ANTENNA_INTELLIGENCE_PERCEPTION_ENDPOINT = "http://127.0.0.1:8020/extract"
-# $env:ANTENNA_INTELLIGENCE_PERCEPTION_TIMEOUT_SECONDS = "120"
+$env:ANTENNA_INTELLIGENCE_PERCEPTION_ENDPOINT = "http://127.0.0.1:8020/extract"
+$env:ANTENNA_INTELLIGENCE_PERCEPTION_TIMEOUT_SECONDS = "120"
 # $env:ANTENNA_INTELLIGENCE_PERCEPTION_API_KEY = "replace-me"
+
+# Local OCR/VLM sidecar (the package includes a demo engine).
+$env:PERCEPTION_HOST = "127.0.0.1"
+$env:PERCEPTION_PORT = "8020"
+$env:PERCEPTION_PLUGIN_PATH = "$PSScriptRoot\plugins"
+# Configure real engines with package.module:create_engine.
+# $env:PERCEPTION_OCR_ENGINE_MODULE = "your_ocr_plugin:create_engine"
+# $env:PERCEPTION_VLM_ENGINE_MODULE = "your_vlm_plugin:create_engine"
 '@
 Set-Content -LiteralPath (Join-Path $BundleRoot "config.example.ps1") -Value $Config -Encoding UTF8
 
@@ -80,7 +92,8 @@ $Start = @'
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Python = Join-Path $Root "python\python.exe"
-$AppSrc = Join-Path $Root "app\src"
+$McpSrc = Join-Path $Root "app\src"
+$PerceptionSrc = Join-Path $Root "app\perception\src"
 $Config = Join-Path $Root "config.ps1"
 $StateDir = Join-Path $Root "data\runtime"
 $LogDir = Join-Path $Root "logs"
@@ -89,49 +102,58 @@ if (Test-Path -LiteralPath $Config) { . $Config }
 if (-not $env:ANTENNA_INTELLIGENCE_TRANSPORT) { $env:ANTENNA_INTELLIGENCE_TRANSPORT = "streamable-http" }
 if (-not $env:ANTENNA_INTELLIGENCE_HOST) { $env:ANTENNA_INTELLIGENCE_HOST = "0.0.0.0" }
 if (-not $env:ANTENNA_INTELLIGENCE_PORT) { $env:ANTENNA_INTELLIGENCE_PORT = "8010" }
-if (-not $env:ANTENNA_INTELLIGENCE_INPUT_ROOTS) { $env:ANTENNA_INTELLIGENCE_INPUT_ROOTS = (Join-Path $Root "data\inputs") }
-if (-not $env:ANTENNA_INTELLIGENCE_OUTPUT_ROOT) { $env:ANTENNA_INTELLIGENCE_OUTPUT_ROOT = (Join-Path $Root "data\outputs") }
-$env:PYTHONPATH = $AppSrc
-$stdout = Join-Path $LogDir "server.stdout.log"
-$stderr = Join-Path $LogDir "server.stderr.log"
-$process = Start-Process -FilePath $Python -ArgumentList @("-B", "-m", "antenna_design_intelligence_mcp", "run", "--transport", $env:ANTENNA_INTELLIGENCE_TRANSPORT, "--host", $env:ANTENNA_INTELLIGENCE_HOST, "--port", $env:ANTENNA_INTELLIGENCE_PORT) -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-$process.Id | Set-Content -LiteralPath (Join-Path $StateDir "pid.txt") -Encoding ASCII
-Write-Host "Antenna intelligence MCP started: http://$($env:ANTENNA_INTELLIGENCE_HOST):$($env:ANTENNA_INTELLIGENCE_PORT)/mcp (PID $($process.Id))"
+if (-not $env:PERCEPTION_HOST) { $env:PERCEPTION_HOST = "127.0.0.1" }
+if (-not $env:PERCEPTION_PORT) { $env:PERCEPTION_PORT = "8020" }
+if (-not $env:PERCEPTION_PLUGIN_PATH) { $env:PERCEPTION_PLUGIN_PATH = (Join-Path $Root "plugins") }
+$env:PYTHONPATH = $PerceptionSrc + ";" + $env:PERCEPTION_PLUGIN_PATH
+$perceptionOut = Join-Path $LogDir "perception.stdout.log"
+$perceptionErr = Join-Path $LogDir "perception.stderr.log"
+$perception = Start-Process -FilePath $Python -ArgumentList @("-B", "-m", "antenna_perception_sidecar") -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $perceptionOut -RedirectStandardError $perceptionErr -PassThru
+$env:PYTHONPATH = $McpSrc
+$mcpOut = Join-Path $LogDir "mcp.stdout.log"
+$mcpErr = Join-Path $LogDir "mcp.stderr.log"
+$mcp = Start-Process -FilePath $Python -ArgumentList @("-B", "-m", "antenna_design_intelligence_mcp", "run", "--transport", $env:ANTENNA_INTELLIGENCE_TRANSPORT, "--host", $env:ANTENNA_INTELLIGENCE_HOST, "--port", $env:ANTENNA_INTELLIGENCE_PORT) -WorkingDirectory $Root -WindowStyle Hidden -RedirectStandardOutput $mcpOut -RedirectStandardError $mcpErr -PassThru
+@(@{name="perception"; pid=$perception.Id; port=[int]$env:PERCEPTION_PORT}, @{name="mcp"; pid=$mcp.Id; port=[int]$env:ANTENNA_INTELLIGENCE_PORT}) | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $StateDir "pids.json") -Encoding UTF8
+Write-Host "Perception sidecar: http://$($env:PERCEPTION_HOST):$($env:PERCEPTION_PORT) (PID $($perception.Id))"
+Write-Host "Antenna MCP: http://$($env:ANTENNA_INTELLIGENCE_HOST):$($env:ANTENNA_INTELLIGENCE_PORT)/mcp (PID $($mcp.Id))"
 '@
-Set-Content -LiteralPath (Join-Path $BundleRoot "start-server.ps1") -Value $Start -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $BundleRoot "start-all.ps1") -Value $Start -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $BundleRoot "start-server.ps1") -Value '$Root = Split-Path -Parent $MyInvocation.MyCommand.Path; & (Join-Path $Root "start-all.ps1")' -Encoding UTF8
 
 $Stop = @'
 $ErrorActionPreference = "SilentlyContinue"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PidFile = Join-Path $Root "data\runtime\pid.txt"
-if (Test-Path -LiteralPath $PidFile) {
-    $pidValue = [int](Get-Content -Raw -LiteralPath $PidFile)
-    Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
+$State = Join-Path $Root "data\runtime\pids.json"
+if (Test-Path -LiteralPath $State) {
+    $items = Get-Content -Raw -LiteralPath $State | ConvertFrom-Json
+    foreach ($item in @($items)) { Stop-Process -Id ([int]$item.pid) -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $State -Force -ErrorAction SilentlyContinue
 }
-Write-Host "Antenna intelligence MCP stopped."
+Write-Host "Perception sidecar and antenna MCP stopped."
 '@
-Set-Content -LiteralPath (Join-Path $BundleRoot "stop-server.ps1") -Value $Stop -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $BundleRoot "stop-all.ps1") -Value $Stop -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $BundleRoot "stop-server.ps1") -Value '$Root = Split-Path -Parent $MyInvocation.MyCommand.Path; & (Join-Path $Root "stop-all.ps1")' -Encoding UTF8
 
 $Health = @'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PidFile = Join-Path $Root "data\runtime\pid.txt"
-if (-not (Test-Path -LiteralPath $PidFile)) { Write-Error "Service is not started."; exit 1 }
-$pidValue = [int](Get-Content -Raw -LiteralPath $PidFile)
-$process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
-if ($null -eq $process) { Write-Error "Service process is not running."; exit 1 }
-$port = if ($env:ANTENNA_INTELLIGENCE_PORT) { [int]$env:ANTENNA_INTELLIGENCE_PORT } else { 8010 }
-$tcp = Test-NetConnection -ComputerName 127.0.0.1 -Port $port -InformationLevel Quiet
-if (-not $tcp) { Write-Error "Service process is running but port is not listening."; exit 1 }
-Write-Host "Antenna intelligence MCP is running (PID $pidValue, port $port)."
+$State = Join-Path $Root "data\runtime\pids.json"
+if (-not (Test-Path -LiteralPath $State)) { Write-Error "Services are not started."; exit 1 }
+$items = Get-Content -Raw -LiteralPath $State | ConvertFrom-Json
+$failed = $false
+foreach ($item in @($items)) {
+    $process = Get-Process -Id ([int]$item.pid) -ErrorAction SilentlyContinue
+    $tcp = Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$item.port) -InformationLevel Quiet
+    if ($null -eq $process -or -not $tcp) { Write-Host "$($item.name): failed"; $failed = $true } else { Write-Host "$($item.name): running (PID $($item.pid), port $($item.port))" }
+}
+if ($failed) { exit 1 }
 '@
 Set-Content -LiteralPath (Join-Path $BundleRoot "health-check.ps1") -Value $Health -Encoding UTF8
 
 $Cmd = @'
 @echo off
-powershell -ExecutionPolicy Bypass -File "%~dp0start-server.ps1"
+powershell -ExecutionPolicy Bypass -File "%~dp0start-all.ps1"
 '@
-Set-Content -LiteralPath (Join-Path $BundleRoot "start-server.cmd") -Value $Cmd -Encoding ASCII
+Set-Content -LiteralPath (Join-Path $BundleRoot "start-all.cmd") -Value $Cmd -Encoding ASCII
 
 $Readme = @'
 # Antenna Design Intelligence MCP Offline Bundle
@@ -140,11 +162,11 @@ This standalone package contains only the antenna design intelligence MCP.
 
 - Endpoint: `http://<server-ip>:8010/mcp`
 - Transport: `streamable-http`
-- Start: `start-server.ps1` or `start-server.cmd`
-- Stop: `stop-server.ps1`
+- Start: `start-all.ps1` or `start-all.cmd` (starts MCP and sidecar)
+- Stop: `stop-all.ps1`
 - Health: `health-check.ps1`
 
-The package includes portable CPython and offline dependencies. It does not include HFSS MCP, AEDT/HFSS, OCR/VLM models, input papers, or generated artifacts. See `docs/antenna-intelligence-offline-deployment.md`.
+The package includes portable CPython, the protocol sidecar, and offline dependencies. The default demo engine proves the complete chain; configure `PERCEPTION_OCR_ENGINE_MODULE` and/or `PERCEPTION_VLM_ENGINE_MODULE` for real models. It does not include HFSS MCP, AEDT/HFSS, model weights, input papers, or generated artifacts. See `docs/antenna-intelligence-offline-deployment.md`.
 '@
 Set-Content -LiteralPath (Join-Path $BundleRoot "README-OFFLINE.md") -Value $Readme -Encoding UTF8
 
@@ -158,8 +180,14 @@ $Manifest = [ordered]@{
     git_commit = $Commit
     platform = "windows-x64"
     python_version = (& (Join-Path $RuntimeRoot "python.exe") -c "import platform; print(platform.python_version())").Trim()
-    entry = "python\python.exe -B -m antenna_design_intelligence_mcp run"
-    endpoint = "http://<server-ip>:8010/mcp"
+    entries = [ordered]@{
+        mcp = "python\python.exe -B -m antenna_design_intelligence_mcp run"
+        perception = "python\python.exe -B -m antenna_perception_sidecar"
+    }
+    endpoints = [ordered]@{
+        mcp = "http://<server-ip>:8010/mcp"
+        perception = "http://127.0.0.1:8020"
+    }
     requires = @("Windows x64", "No network at runtime", "HFSS MCP is deployed separately")
 }
 $Manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $BundleRoot "manifest.json") -Encoding UTF8
@@ -168,9 +196,9 @@ Get-ChildItem -LiteralPath $BundleRoot -Recurse -Directory -Force -Filter "__pyc
 Get-ChildItem -LiteralPath $BundleRoot -Recurse -File -Force | Where-Object { $_.Extension -in @(".pyc", ".pyo") } | Remove-Item -Force
 
 $BundlePython = Join-Path $RuntimeRoot "python.exe"
-$env:PYTHONPATH = Join-Path $AppRoot "src"
+$env:PYTHONPATH = (Join-Path $AppRoot "src") + ";" + (Join-Path $PerceptionAppRoot "src")
 Write-Host "Validating standalone antenna MCP imports"
-& $BundlePython -B -c "import antenna_design_intelligence_mcp, mcp, pydantic; print('imports-ok')"
+& $BundlePython -B -c "import antenna_design_intelligence_mcp, antenna_perception_sidecar, mcp, pydantic; print('imports-ok')"
 if ($LASTEXITCODE -ne 0) { throw "Standalone antenna MCP import validation failed." }
 
 if (-not $NoZip) {

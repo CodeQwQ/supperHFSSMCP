@@ -21,11 +21,11 @@ $env:ANTENNA_INTELLIGENCE_INPUT_ROOTS = "D:\AntennaInputs"
 $env:ANTENNA_INTELLIGENCE_OUTPUT_ROOT = "D:\AntennaIntelligenceData"
 ```
 
-4. 启动：
+4. 启动完整服务（sidecar + MCP）：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\start-server.ps1
+.\start-all.ps1
 ```
 
 5. 检查：
@@ -37,7 +37,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 6. 停止：
 
 ```powershell
-.\stop-server.ps1
+.\stop-all.ps1
 ```
 
 ## 与 HFSS MCP 的关系
@@ -53,7 +53,7 @@ Agent 先调用天线设计信息 MCP 获取带证据的 `AntennaDesignSpec`，�
 
 ## 当前限制
 
-首版不包含 OCR/VLM 模型。`list_providers` 会显示视觉 Provider 未配置；后续模型应作为可插拔 Provider 单独安装，不需要重新部署 HFSS MCP。
+包内包含可运行的协议 sidecar 和演示引擎，因此不配置真实模型时也能验证完整 MCP→sidecar 链路。真实 OCR/VLM 模型仍需作为独立引擎插件或模型包配置，不需要重新部署 HFSS MCP。
 
 ## 接入 OCR/VLM sidecar
 
@@ -68,7 +68,20 @@ $env:ANTENNA_INTELLIGENCE_PERCEPTION_TIMEOUT_SECONDS = "120"
 # $env:ANTENNA_INTELLIGENCE_PERCEPTION_API_KEY = "your-token"
 ```
 
-重启 MCP 后调用 `list_providers`，应看到 `http_perception` 为 `available`。MCP 本身不会导入 PyTorch、CUDA、OCR 或 VLM SDK。
+运行 `start-all.ps1` 后调用 `list_providers`，应看到 `http_perception` 为 `available`。MCP 本身不会导入 PyTorch、CUDA、OCR 或 VLM SDK。
+
+sidecar 默认由同一个离线包启动在 `127.0.0.1:8020`，默认演示引擎只用于链路验收，不代表真实论文识别结果。
+
+### 配置真实 OCR/VLM 引擎
+
+sidecar 支持独立 Python 模块工厂：
+
+```powershell
+$env:PERCEPTION_OCR_ENGINE_MODULE = "your_ocr_plugin:create_engine"
+$env:PERCEPTION_VLM_ENGINE_MODULE = "your_vlm_plugin:create_engine"
+```
+
+插件目录加入 sidecar 进程的 `PYTHONPATH` 后，`create_engine()` 返回带有 `engine_id`、`engine_version`、`capabilities` 和 `extract(input_digest, suffix, content)` 的对象。OCR/VLM 的 CUDA、PyTorch 和模型文件只存在于插件自己的运行环境，MCP 协议层无需修改。
 
 ### sidecar 请求协议
 

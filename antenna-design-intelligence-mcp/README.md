@@ -9,6 +9,7 @@
 - 输出 confirmed、inferred、conflicting、unknown 状态和来源引用；
 - 通过 MCP resources 提供中文提取工作手册；
 - 不下载、不打包 OCR/VLM，不需要 GPU。
+- 可通过 `ANTENNA_INTELLIGENCE_PERCEPTION_ENDPOINT` 接入独立 OCR/VLM HTTP sidecar；MCP 不依赖模型 SDK、CUDA 或 sidecar 文件系统。
 
 ## 运行
 

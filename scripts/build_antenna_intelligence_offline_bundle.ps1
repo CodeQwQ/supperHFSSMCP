@@ -56,8 +56,9 @@ $PerceptionRoot = Join-Path $RepoRoot "perception-sidecar"
 Copy-Item -LiteralPath (Join-Path $PerceptionRoot "src") -Destination (Join-Path $PerceptionAppRoot "src") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $PerceptionRoot "pyproject.toml") -Destination $PerceptionAppRoot -Force
 Copy-Item -LiteralPath (Join-Path $PerceptionRoot "README.md") -Destination $PerceptionAppRoot -Force
+Copy-Item -LiteralPath (Join-Path $PerceptionRoot "plugins") -Destination (Join-Path $BundleRoot "plugins") -Recurse -Force
 
-$DocFiles = @("antenna-intelligence-offline-deployment.md")
+$DocFiles = @("antenna-intelligence-offline-deployment.md", "ollama-vlm-deployment.md")
 foreach ($doc in $DocFiles) {
     $source = Join-Path (Join-Path $RepoRoot "docs") $doc
     if (-not (Test-Path -LiteralPath $source)) { throw "Required document not found: $source" }
@@ -84,7 +85,10 @@ $env:PERCEPTION_PORT = "8020"
 $env:PERCEPTION_PLUGIN_PATH = "$PSScriptRoot\plugins"
 # Configure real engines with package.module:create_engine.
 # $env:PERCEPTION_OCR_ENGINE_MODULE = "your_ocr_plugin:create_engine"
-# $env:PERCEPTION_VLM_ENGINE_MODULE = "your_vlm_plugin:create_engine"
+$env:PERCEPTION_VLM_ENGINE_MODULE = "ollama_vlm_plugin:create_engine"
+$env:OLLAMA_API_ENDPOINT = "http://127.0.0.1:11434/api/chat"
+$env:OLLAMA_VLM_MODEL = "qwen2.5vl:7b"
+$env:OLLAMA_API_TIMEOUT_SECONDS = "300"
 '@
 Set-Content -LiteralPath (Join-Path $BundleRoot "config.example.ps1") -Value $Config -Encoding UTF8
 
@@ -166,7 +170,7 @@ This standalone package contains only the antenna design intelligence MCP.
 - Stop: `stop-all.ps1`
 - Health: `health-check.ps1`
 
-The package includes portable CPython, the protocol sidecar, and offline dependencies. The default demo engine proves the complete chain; configure `PERCEPTION_OCR_ENGINE_MODULE` and/or `PERCEPTION_VLM_ENGINE_MODULE` for real models. It does not include HFSS MCP, AEDT/HFSS, model weights, input papers, or generated artifacts. See `docs/antenna-intelligence-offline-deployment.md`.
+The package includes portable CPython, the protocol sidecar, the Ollama HTTP VLM plugin, and offline dependencies. It does not include HFSS MCP, AEDT/HFSS, Ollama, model weights, input papers, or generated artifacts. Configure `OLLAMA_API_ENDPOINT` and `OLLAMA_VLM_MODEL` in `config.ps1`, then start Ollama separately. See `docs/antenna-intelligence-offline-deployment.md`.
 '@
 Set-Content -LiteralPath (Join-Path $BundleRoot "README-OFFLINE.md") -Value $Readme -Encoding UTF8
 
